@@ -26,6 +26,18 @@ The system enforces strict temporal evaluation guarantees: leak-free windowing, 
 
 ---
 
+## Documentation
+
+Detailed architectural, mathematical, and risk analyses are maintained in the project's formal model card:
+
+- 📄 **[Formal Model Card](energy-monitoring-mlops/docs/model_card.md)**:
+  - **Temporal Validation Protocol**: 80/20 chronological split mechanics with zero forward leakage.
+  - **Empirical Gap Analysis**: Detailed breakdown of the $r \approx 0.83$ autoregressive lag-1 correlation and thermal inertia delays ($30\text{--}90$ minutes).
+  - **Failure Modes**: Persistence step-lag penalties and sensor decoupling limitations.
+  - **Production Architecture**: Recommendations for two-stage regime-switching (Standby vs. Active Burst) and asymmetric loss calibration.
+
+---
+
 ## Key Pipeline Principles
 
 1. **Strict Chronological Splitting:** Random cross-validation leaks forward-looking temporal information. All training, validation, and testing steps preserve strict temporal ordering with forward-only validation.
@@ -107,7 +119,7 @@ jupyter notebook notebooks/01_eda.ipynb
 - [x] **Git Repository:** Clean multi-directory project structure under Git version control.
 - [x] **DVC Dataset Versioning:** Remote cache setup and tracking for raw dataset hashes (`.dvc`).
 - [x] **MLflow Experiment Tracking:** Logging metrics, parameters, and model artifacts with SQLite tracking backends.
-- [x] **Initial Model Evaluation:** Empirical evaluation, error decomposition, and formal documentation (`docs/model_card.md`).
+- [x] **Initial Model Evaluation & Documentation:** Comprehensive analysis documented in [energy-monitoring-mlops/docs/model_card.md](energy-monitoring-mlops/docs/model_card.md).
 
 ### Phase 2 – Productionization & Deployment (In Progress)
 - [ ] **Model Testing with PyTest:** Schema boundary assertions, negative consumption guards, and chronological leak checks.
