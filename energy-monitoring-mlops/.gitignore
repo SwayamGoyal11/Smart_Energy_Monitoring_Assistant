@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+.pytest_cache/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+
+# Environments
+.env
+.venv
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# MLflow
+mlruns/
+mlartifacts/
+mlflow.db
+
+# DVC - raw and processed data tracked by DVC, not Git
+/data/raw/energydata_complete.csv
+/data/processed/
+
+# Models
+models/*.pkl
+models/*.joblib
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.log
