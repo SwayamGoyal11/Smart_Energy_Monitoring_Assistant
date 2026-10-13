@@ -2,7 +2,7 @@
 
 An end-to-end MLOps time-series pipeline for forecasting short-term household energy demand (Wh) at 10-minute intervals using the UCI Appliances Energy Prediction dataset.
 
-The system enforces strict temporal evaluation guarantees: leak-free windowing, strict chronological partitioning, verifiable data versioning via DVC, and automated MLflow experiment auditing.
+The system enforces strict temporal evaluation guarantees: leak-free windowing, strict chronological partitioning, verifiable data versioning via DVC, automated MLflow experiment auditing, and production-grade containerized deployment.
 
 ---
 
@@ -51,9 +51,9 @@ The system enforces strict temporal evaluation guarantees: leak-free windowing, 
 ### Why Does Persistence Beat Tree Ensembles?
 Nonlinear models (Random Forest and XGBoost) fail to beat a simple persistence baseline on MAE for three structural reasons:
 
-- **Autoregressive Concentration:** Standby consumption (40–60 Wh) represents >75% of all 10-minute intervals. During idle states, y_t approx y_{t-1}, giving persistence near-zero error.
+- **Autoregressive Concentration:** Standby consumption (40–60 Wh) represents >75% of all 10-minute intervals. During idle states, $y_t \approx y_{t-1}$, giving persistence near-zero error.
 - **Impulse Asymmetry:** Spike events (kettles, ovens, washing machines) are short-lived pulses. Tree models partition feature space into leaf-mean estimates, smoothing peak tops and over-predicting descent tails.
-- **Thermal Inertia Lag:** Indoor temperatures (T1–T9) lag appliance heat dissipation by 30–90 minutes. Instantaneous ambient sensors cannot anticipate human-driven appliance activations without historical consumption memory.
+- **Thermal Inertia Lag:** Indoor temperatures ($T_1$–$T_9$) lag appliance heat dissipation by 30–90 minutes. Instantaneous ambient sensors cannot anticipate human-driven appliance activations without historical consumption memory.
 
 *For complete mathematical and architectural derivations, read the [Formal Model Card](energy-monitoring-mlops/docs/model_card.md).*
 
@@ -97,16 +97,23 @@ jupyter notebook notebooks/01_eda.ipynb
 
 ---
 
-## Phase Status
+## Project Roadmap & Phase Status
 
-- [x] **Phase 1: ML Lifecycle & Scaffolding**
-  - Dataset ingestion and DVC remote tracking
-  - Leak-free temporal and lag transformations
-  - Baseline, OLS, Random Forest, and XGBoost runners with MLflow logging
-  - PyTest validation suite
-  - Exploratory data analysis (`notebooks/01_eda.ipynb`)
-  - Empirical documentation (`docs/model_card.md`)
-- [ ] **Phase 2: Serving & Production (Next)**
-  - Two-stage regime switching architecture (Classifier + Predictor)
-  - FastAPI inference microservice with Pydantic contract validation
-  - Containerized deployment via Docker
+### Phase 1 – Development & Reproducibility (Complete)
+- [x] **Dataset Acquisition & Approval:** Ingestion of the 19,735-record UCI Appliances Energy dataset.
+- [x] **Data Exploration:** Diurnal consumption cycle analysis, ACF/PACF plots, and sensor correlations (`notebooks/01_eda.ipynb`).
+- [x] **Feature Engineering:** Leak-free temporal rolling windows (`mean_3`, `mean_6`, `std_6`) and lag transformations (`lag_1`–`lag_3`).
+- [x] **Baseline Models:** Persistence ($y_t = y_{t-1}$), OLS Linear Regression, Random Forest, and XGBoost runners.
+- [x] **Git Repository:** Clean multi-directory project structure under Git version control.
+- [x] **DVC Dataset Versioning:** Remote cache setup and tracking for raw dataset hashes (`.dvc`).
+- [x] **MLflow Experiment Tracking:** Logging metrics, parameters, and model artifacts with SQLite tracking backends.
+- [x] **Initial Model Evaluation:** Empirical evaluation, error decomposition, and formal documentation (`docs/model_card.md`).
+
+### Phase 2 – Productionization & Deployment (In Progress)
+- [ ] **Model Testing with PyTest:** Schema boundary assertions, negative consumption guards, and chronological leak checks.
+- [ ] **Model-Risk & Quality Checks:** Performance regression monitoring against the persistence baseline.
+- [ ] **MLflow Model Registry:** Model versioning, staging tags (`Staging` / `Production`), and serialized artifacts.
+- [ ] **FastAPI Inference Service:** REST API with Pydantic request/response contract validation.
+- [ ] **Docker Containerization:** Multi-stage lightweight Docker image for portable inference.
+- [ ] **GitHub Actions CI/CD:** Automated testing, linting, and build validation on push/PR.
+- [ ] **Deployment:** Cloud/container orchestration and endpoint verification.
