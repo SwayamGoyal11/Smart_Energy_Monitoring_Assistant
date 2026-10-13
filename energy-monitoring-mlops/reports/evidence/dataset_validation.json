@@ -1,0 +1,24 @@
+{
+  "shape": "(19735, 29)",
+  "n_rows": "19735",
+  "n_cols": "29",
+  "columns": "['date', 'Appliances', 'lights', 'T1', 'RH_1', 'T2', 'RH_2', 'T3', 'RH_3', 'T4', 'RH_4', 'T5', 'RH_5', 'T6', 'RH_6', 'T7', 'RH_7', 'T8', 'RH_8', 'T9', 'RH_9', 'T_out', 'Press_mm_hg', 'RH_out', 'Windspeed', 'Visibility', 'Tdewpoint', 'rv1', 'rv2']",
+  "total_missing": "0",
+  "has_missing": "False",
+  "duplicate_rows": "0",
+  "date_min": "2016-01-11 17:00:00",
+  "date_max": "2016-05-27 18:00:00",
+  "date_range_days": "137",
+  "time_interval_mode": "0 days 00:10:00",
+  "is_regular_10min": "True",
+  "is_chronological": "True",
+  "target_stats": {
+    "mean": 97.69,
+    "median": 60.0,
+    "std": 102.52,
+    "min": 10.0,
+    "max": 1080.0,
+    "q25": 50.0,
+    "q75": 100.0
+  }
+}
