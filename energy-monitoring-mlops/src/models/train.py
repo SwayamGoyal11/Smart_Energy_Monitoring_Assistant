@@ -45,6 +45,13 @@ os.makedirs(REPORTS_DIR, exist_ok=True)
 
 
 def setup_mlflow():
+    """
+    Configure the MLflow tracking server and experiment.
+
+    Sets the SQLite tracking URI and creates (or reuses) the experiment
+    named ``energy-consumption-prediction``.  Call this once before any
+    ``mlflow.start_run`` context.
+    """
     mlflow.set_tracking_uri(MLFLOW_URI)
     mlflow.set_experiment(EXPERIMENT_NAME)
     print(f"  MLflow tracking URI : {MLFLOW_URI}")
@@ -83,6 +90,25 @@ def train_baseline(X_val, y_val, X_test, y_test):
 
 # Linear Regression
 def train_linear_regression(X_train, y_train, X_val, y_val, X_test, y_test):
+    """
+    Train an Ordinary Least Squares (OLS) Linear Regression model.
+
+    Fits on ``X_train`` / ``y_train``, evaluates on both validation and
+    test splits, saves the serialised model to ``models/`` via joblib,
+    and logs all hyperparameters and metrics to MLflow.
+
+    Args:
+        X_train (pd.DataFrame): Training feature matrix.
+        y_train (pd.Series):    Training target (Appliances, Wh).
+        X_val   (pd.DataFrame): Validation feature matrix.
+        y_val   (pd.Series):    Validation target.
+        X_test  (pd.DataFrame): Test feature matrix.
+        y_test  (pd.Series):    Test target.
+
+    Returns:
+        dict: Keys ``model``, ``val_metrics``, ``test_metrics``,
+              ``model_obj``, ``val_preds``, ``test_preds``.
+    """
     model = LinearRegression()
     model.fit(X_train, y_train)
 
@@ -119,6 +145,26 @@ def train_linear_regression(X_train, y_train, X_val, y_val, X_test, y_test):
 
 # Random Forest
 def train_random_forest(X_train, y_train, X_val, y_val, X_test, y_test):
+    """
+    Train a Random Forest Regressor with a bagged ensemble of 100 trees.
+
+    Hyperparameters: ``n_estimators=100``, ``max_depth=15``,
+    ``min_samples_leaf=4``.  Model is serialised to
+    ``models/random_forest.joblib`` and all params / metrics are logged
+    to MLflow.
+
+    Args:
+        X_train (pd.DataFrame): Training feature matrix.
+        y_train (pd.Series):    Training target (Appliances, Wh).
+        X_val   (pd.DataFrame): Validation feature matrix.
+        y_val   (pd.Series):    Validation target.
+        X_test  (pd.DataFrame): Test feature matrix.
+        y_test  (pd.Series):    Test target.
+
+    Returns:
+        dict: Keys ``model``, ``val_metrics``, ``test_metrics``,
+              ``model_obj``, ``val_preds``, ``test_preds``.
+    """
     params = {"n_estimators": 100, "max_depth": 15,
               "min_samples_leaf": 4, "random_state": 42, "n_jobs": 1}
     model = RandomForestRegressor(**params)
@@ -158,6 +204,27 @@ def train_random_forest(X_train, y_train, X_val, y_val, X_test, y_test):
 
 # XGBoost
 def train_xgboost(X_train, y_train, X_val, y_val, X_test, y_test):
+    """
+    Train an XGBoost Gradient-Boosted Trees regressor.
+
+    Hyperparameters: ``n_estimators=200``, ``max_depth=6``,
+    ``learning_rate=0.05``, ``subsample=0.8``, ``colsample_bytree=0.8``.
+    Training uses an eval set for RMSE monitoring.  The full evaluation
+    history (``evals_result``) is returned so the caller can plot the
+    learning curve.  Model saved to ``models/xgboost.joblib``.
+
+    Args:
+        X_train (pd.DataFrame): Training feature matrix.
+        y_train (pd.Series):    Training target (Appliances, Wh).
+        X_val   (pd.DataFrame): Validation feature matrix.
+        y_val   (pd.Series):    Validation target.
+        X_test  (pd.DataFrame): Test feature matrix.
+        y_test  (pd.Series):    Test target.
+
+    Returns:
+        dict: Keys ``model``, ``val_metrics``, ``test_metrics``,
+              ``model_obj``, ``val_preds``, ``test_preds``, ``evals_result``.
+    """
     params = {"n_estimators": 200, "max_depth": 6, "learning_rate": 0.05,
               "subsample": 0.8, "colsample_bytree": 0.8,
               "random_state": 42, "n_jobs": 1, "tree_method": "hist",
@@ -205,6 +272,18 @@ def train_xgboost(X_train, y_train, X_val, y_val, X_test, y_test):
 
 # Comparison table
 def build_comparison_table(results: list) -> pd.DataFrame:
+    """
+    Assemble a tidy comparison DataFrame from a list of training result dicts.
+
+    Args:
+        results (list[dict]): Each dict must contain ``model``,
+            ``val_metrics``, and ``test_metrics`` keys as returned by
+            each ``train_*`` function.
+
+    Returns:
+        pd.DataFrame: Rows are models, columns are Val/Test MAE, RMSE, R².
+                      Sorted ascending by Val MAE.
+    """
     rows = []
     for r in results:
         rows.append({
@@ -220,6 +299,15 @@ def build_comparison_table(results: list) -> pd.DataFrame:
 
 
 def save_comparison_table(df: pd.DataFrame) -> str:
+    """
+    Persist the model comparison table to ``reports/evidence/model_comparison.csv``.
+
+    Args:
+        df (pd.DataFrame): Output of :func:`build_comparison_table`.
+
+    Returns:
+        str: Absolute path to the saved CSV file.
+    """
     path = os.path.join(REPORTS_DIR, "model_comparison.csv")
     df.to_csv(path, index=False)
     print(f"\n  Comparison table saved -> {path}")
