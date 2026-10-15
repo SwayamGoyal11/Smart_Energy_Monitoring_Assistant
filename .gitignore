@@ -1,3 +1,72 @@
+# Data files
 energydata_complete.csv
-
 dvc_storage_remote/
+
+# Environment variables & secrets
+.env
+.env.*
+*.env
+secrets.json
+*.key
+*.pem
+
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb~
+
+# MLflow
+mlruns/
+mlartifacts/
+mlflow.db
+
+# DVC
+/energy-monitoring-mlops/data/raw/energydata_complete.csv
+/energy-monitoring-mlops/data/processed/
+
+# Trained models
+energy-monitoring-mlops/models/*.joblib
+energy-monitoring-mlops/models/*.pkl
+
+# Generated slides & reports
+energy-monitoring-mlops/reports/evidence/slide1_key_metrics.png
+energy-monitoring-mlops/reports/evidence/slide2_model_diagnostics.png
+energy-monitoring-mlops/reports/evidence/evaluation_metrics_deepdive.json
+energy-monitoring-mlops/reports/evidence/regime_breakdown.csv
+energy-monitoring-mlops/reports/evidence/feature_importance.csv
+energy-monitoring-mlops/reports/evidence/model_comparison.csv
+energy-monitoring-mlops/reports/evidence/dataset_validation.json
+
+# Temp dirs created by pipeline
+energy-monitoring-mlops/.tmp/
+.tmp/
+
+# IDE & OS
+.vscode/
+.idea/
+*.log
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/

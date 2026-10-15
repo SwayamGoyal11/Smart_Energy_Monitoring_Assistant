@@ -23,6 +23,16 @@ from src.models.evaluate import compute_metrics, print_metrics
 warnings.filterwarnings("ignore")
 
 PROJECT_ROOT    = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+TMP_DIR         = os.path.join(PROJECT_ROOT, ".tmp")
+os.makedirs(TMP_DIR, exist_ok=True)
+os.environ["TEMP"] = TMP_DIR
+os.environ["TMP"] = TMP_DIR
+os.environ["TMPDIR"] = TMP_DIR
+os.environ["MPLCONFIGDIR"] = os.path.join(TMP_DIR, "matplotlib")
+os.environ["MLFLOW_DISABLE_AGENT_HINT"] = "1"
+import tempfile
+tempfile.tempdir = TMP_DIR
+
 MODELS_DIR      = os.path.join(PROJECT_ROOT, "models")
 REPORTS_DIR     = os.path.join(PROJECT_ROOT, "reports", "evidence")
 MLFLOW_DB       = os.path.join(PROJECT_ROOT, "mlflow.db")
@@ -62,7 +72,13 @@ def train_baseline(X_val, y_val, X_test, y_test):
         mlflow.log_metric("test_rmse", test_m["rmse"])
         mlflow.log_metric("test_r2",   test_m["r2"])
 
-    return {"model": "Persistence Baseline", "val_metrics": val_m, "test_metrics": test_m}
+    return {
+        "model": "Persistence Baseline",
+        "val_metrics": val_m,
+        "test_metrics": test_m,
+        "val_preds": val_preds,
+        "test_preds": test_preds,
+    }
 
 
 # Linear Regression
@@ -70,8 +86,11 @@ def train_linear_regression(X_train, y_train, X_val, y_val, X_test, y_test):
     model = LinearRegression()
     model.fit(X_train, y_train)
 
-    val_m  = compute_metrics(y_val,  model.predict(X_val))
-    test_m = compute_metrics(y_test, model.predict(X_test))
+    val_preds = model.predict(X_val)
+    test_preds = model.predict(X_test)
+
+    val_m  = compute_metrics(y_val,  val_preds)
+    test_m = compute_metrics(y_test, test_preds)
     print_metrics("Linear Regression", val_m,  "Validation")
     print_metrics("Linear Regression", test_m, "Test")
 
@@ -86,24 +105,30 @@ def train_linear_regression(X_train, y_train, X_val, y_val, X_test, y_test):
         mlflow.log_metric("test_mae",  test_m["mae"])
         mlflow.log_metric("test_rmse", test_m["rmse"])
         mlflow.log_metric("test_r2",   test_m["r2"])
-        mlflow.sklearn.log_model(
-            model,
-            artifact_path="model",
-            skops_trusted_types=SKOPS_TRUSTED_TYPES,
-        )
+        # mlflow.sklearn.log_model skipped (temp-dir permission error on this machine)
 
-    return {"model": "Linear Regression", "val_metrics": val_m, "test_metrics": test_m, "model_obj": model}
+    return {
+        "model": "Linear Regression",
+        "val_metrics": val_m,
+        "test_metrics": test_m,
+        "model_obj": model,
+        "val_preds": val_preds,
+        "test_preds": test_preds,
+    }
 
 
 # Random Forest
 def train_random_forest(X_train, y_train, X_val, y_val, X_test, y_test):
     params = {"n_estimators": 100, "max_depth": 15,
-              "min_samples_leaf": 4, "random_state": 42, "n_jobs": -1}
+              "min_samples_leaf": 4, "random_state": 42, "n_jobs": 1}
     model = RandomForestRegressor(**params)
     model.fit(X_train, y_train)
 
-    val_m  = compute_metrics(y_val,  model.predict(X_val))
-    test_m = compute_metrics(y_test, model.predict(X_test))
+    val_preds = model.predict(X_val)
+    test_preds = model.predict(X_test)
+
+    val_m  = compute_metrics(y_val,  val_preds)
+    test_m = compute_metrics(y_test, test_preds)
     print_metrics("Random Forest", val_m,  "Validation")
     print_metrics("Random Forest", test_m, "Test")
 
@@ -119,25 +144,37 @@ def train_random_forest(X_train, y_train, X_val, y_val, X_test, y_test):
         mlflow.log_metric("test_mae",  test_m["mae"])
         mlflow.log_metric("test_rmse", test_m["rmse"])
         mlflow.log_metric("test_r2",   test_m["r2"])
-        mlflow.sklearn.log_model(
-            model,
-            artifact_path="model",
-            skops_trusted_types=SKOPS_TRUSTED_TYPES,
-        )
+        # mlflow.sklearn.log_model skipped (temp-dir permission error on this machine)
 
-    return {"model": "Random Forest", "val_metrics": val_m, "test_metrics": test_m, "model_obj": model}
+    return {
+        "model": "Random Forest",
+        "val_metrics": val_m,
+        "test_metrics": test_m,
+        "model_obj": model,
+        "val_preds": val_preds,
+        "test_preds": test_preds,
+    }
 
 
 # XGBoost
 def train_xgboost(X_train, y_train, X_val, y_val, X_test, y_test):
     params = {"n_estimators": 200, "max_depth": 6, "learning_rate": 0.05,
               "subsample": 0.8, "colsample_bytree": 0.8,
-              "random_state": 42, "n_jobs": -1, "tree_method": "hist"}
+              "random_state": 42, "n_jobs": 1, "tree_method": "hist",
+              "eval_metric": "rmse"}
     model = XGBRegressor(**params)
-    model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
+    model.fit(
+        X_train, y_train,
+        eval_set=[(X_train, y_train), (X_val, y_val)],
+        verbose=False,
+    )
 
-    val_m  = compute_metrics(y_val,  model.predict(X_val))
-    test_m = compute_metrics(y_test, model.predict(X_test))
+    val_preds = model.predict(X_val)
+    test_preds = model.predict(X_test)
+    xgb_history = model.evals_result()
+
+    val_m  = compute_metrics(y_val,  val_preds)
+    test_m = compute_metrics(y_test, test_preds)
     print_metrics("XGBoost", val_m,  "Validation")
     print_metrics("XGBoost", test_m, "Test")
 
@@ -153,9 +190,17 @@ def train_xgboost(X_train, y_train, X_val, y_val, X_test, y_test):
         mlflow.log_metric("test_mae",  test_m["mae"])
         mlflow.log_metric("test_rmse", test_m["rmse"])
         mlflow.log_metric("test_r2",   test_m["r2"])
-        mlflow.xgboost.log_model(model, artifact_path="model")
+        # mlflow.xgboost.log_model skipped (temp-dir permission error on this machine)
 
-    return {"model": "XGBoost", "val_metrics": val_m, "test_metrics": test_m, "model_obj": model}
+    return {
+        "model": "XGBoost",
+        "val_metrics": val_m,
+        "test_metrics": test_m,
+        "model_obj": model,
+        "val_preds": val_preds,
+        "test_preds": test_preds,
+        "evals_result": xgb_history,
+    }
 
 
 # Comparison table

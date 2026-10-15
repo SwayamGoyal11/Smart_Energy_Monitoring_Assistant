@@ -9,8 +9,11 @@ build/
 
 # Environments
 .env
+.env.*
+*.env
 .venv
 venv/
+.tmp/
 
 # Jupyter
 .ipynb_checkpoints/
@@ -36,3 +39,11 @@ Thumbs.db
 .vscode/
 .idea/
 *.log
+# Generated evaluation slides & reports (too large for git)
+reports/evidence/slide1_key_metrics.png
+reports/evidence/slide2_model_diagnostics.png
+reports/evidence/evaluation_metrics_deepdive.json
+reports/evidence/regime_breakdown.csv
+reports/evidence/feature_importance.csv
+reports/evidence/model_comparison.csv
+reports/evidence/dataset_validation.json
