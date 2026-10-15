@@ -1,0 +1,31 @@
+config,model,n_features,val_mae,val_rmse,val_r2,test_mae,test_rmse,test_r2
+FULL (v0 feature set),Linear Regression,26,29.1367,59.9822,0.5577,29.5409,61.481,0.5433
+FULL (v0 feature set),Random Forest,26,32.5214,63.3062,0.5074,44.5781,75.8035,0.3057
+FULL (v0 feature set),XGBoost,26,33.3154,63.8085,0.4995,78.2606,105.2477,-0.3384
+- drop time,Linear Regression,21,29.8368,60.2584,0.5537,30.359,61.5605,0.5421
+- drop time,Random Forest,21,32.5404,64.0493,0.4957,45.3103,76.6353,0.2904
+- drop time,XGBoost,21,37.5501,70.2125,0.394,64.9491,96.0514,-0.1147
+- drop env,Linear Regression,11,26.2388,59.6604,0.5625,26.9182,61.0012,0.5504
+- drop env,Random Forest,11,26.0761,57.7319,0.5903,26.6443,61.3469,0.5453
+- drop env,XGBoost,11,25.3582,57.5267,0.5932,26.5354,61.3314,0.5455
+- drop lag,Linear Regression,23,37.3612,72.1741,0.3597,35.9798,71.1525,0.3883
+- drop lag,Random Forest,23,38.0227,73.5606,0.3348,50.4366,85.3873,0.1191
+- drop lag,XGBoost,23,41.3016,77.0543,0.2702,79.4204,104.1546,-0.3107
+- drop rolling,Linear Regression,23,29.44,59.8894,0.5591,30.1226,61.6106,0.5414
+- drop rolling,Random Forest,23,33.4262,64.2118,0.4932,46.4962,78.3306,0.2586
+- drop rolling,XGBoost,23,39.4652,70.3403,0.3918,95.7647,123.6259,-0.8466
+only time,Linear Regression,5,51.1303,91.1357,-0.021,50.6311,90.9358,0.0008
+only time,Random Forest,5,59.4312,104.3214,-0.3378,56.9812,100.6715,-0.2245
+only time,XGBoost,5,53.6629,94.0173,-0.0866,49.5282,88.9494,0.044
+only env,Linear Regression,15,63.232,89.1033,0.0241,74.8856,96.7769,-0.1316
+only env,Random Forest,15,94.1791,125.855,-0.9471,200.8347,227.9776,-5.2798
+only env,XGBoost,15,84.2354,114.036,-0.5985,182.0506,199.8028,-3.8235
+only lag,Linear Regression,3,26.0764,59.5671,0.5638,26.8284,61.2224,0.5471
+only lag,Random Forest,3,26.1151,59.5655,0.5639,26.5016,60.8785,0.5522
+only lag,XGBoost,3,25.7242,59.502,0.5648,25.7176,60.2283,0.5617
+only rolling,Linear Regression,3,31.8005,71.362,0.374,30.584,69.5475,0.4156
+only rolling,Random Forest,3,31.2848,68.3288,0.4261,32.2603,70.8098,0.3942
+only rolling,XGBoost,3,31.4548,68.4847,0.4235,30.957,69.0613,0.4237
+drop lag+rolling (no AR),Linear Regression,20,64.8823,90.3393,-0.0032,74.5904,96.6982,-0.1298
+drop lag+rolling (no AR),Random Forest,20,65.1386,103.2236,-0.3098,147.8668,182.4964,-3.0241
+drop lag+rolling (no AR),XGBoost,20,65.602,98.6558,-0.1964,128.6657,149.5648,-1.7028
