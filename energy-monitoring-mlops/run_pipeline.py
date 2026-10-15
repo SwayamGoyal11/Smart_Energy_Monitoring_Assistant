@@ -9,6 +9,7 @@ Phase 1 main entry point. Run from the project root:
 
 import os
 import sys
+import logging
 
 # Configure workspace-local temporary and cache paths for sandbox compatibility
 WORKSPACE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -41,17 +42,25 @@ from src.models.train import (
 from src.models.evaluation_analytics import run_full_evaluation_audit
 from src.visualization.generate_dashboard_slides import generate_all_slides
 
+# ── Logging setup ────────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-8s  %(message)s",
+    datefmt="%H:%M:%S",
+)
+log = logging.getLogger(__name__)
+
 REPORTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "reports", "evidence")
 os.makedirs(REPORTS_DIR, exist_ok=True)
 
 
 def main():
-    print("\n" + "=" * 60)
-    print("  SMART ENERGY MONITORING ASSISTANT - PHASE 1 & EVALUATION")
-    print("=" * 60)
+    log.info("=" * 60)
+    log.info("  SMART ENERGY MONITORING ASSISTANT - PHASE 1 & EVALUATION")
+    log.info("=" * 60)
 
     # Step 1: Load & validate
-    print("\n[1] Loading and validating dataset...")
+    log.info("[1] Loading and validating dataset...")
     df_raw = load_raw_data()
     val = validate_dataset(df_raw)
     print_validation_report(val)
@@ -62,21 +71,21 @@ def main():
     val_json["target_stats"] = val["target_stats"]
     with open(os.path.join(REPORTS_DIR, "dataset_validation.json"), "w") as f:
         json.dump(val_json, f, indent=2, default=str)
-    print("  Validation report saved -> reports/evidence/dataset_validation.json")
+    log.info("Validation report saved -> reports/evidence/dataset_validation.json")
 
     # Step 2: Feature engineering
-    print("\n[2] Building feature matrix...")
+    log.info("[2] Building feature matrix...")
     df_feat = build_feature_matrix(df_raw)
-    print(f"  Feature matrix shape : {df_feat.shape}")
+    log.info("Feature matrix shape: %s", df_feat.shape)
     processed_path = os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "data", "processed", "features.csv"
     )
     os.makedirs(os.path.dirname(processed_path), exist_ok=True)
     df_feat.to_csv(processed_path, index=False)
-    print("  Saved -> data/processed/features.csv")
+    log.info("Saved -> data/processed/features.csv")
 
     # Step 3: Chronological split
-    print("\n[3] Splitting data chronologically...")
+    log.info("[3] Splitting data chronologically...")
     train_df, val_df, test_df = chronological_split(df_feat)
     print_split_summary(train_df, val_df, test_df)
 
@@ -85,25 +94,25 @@ def main():
     X_test,  y_test  = get_X_y(test_df)
 
     # Step 4: MLflow setup
-    print("\n[4] Setting up MLflow...")
+    log.info("[4] Setting up MLflow...")
     setup_mlflow()
 
     # Step 5: Train all models
-    print("\n[5] Training models...")
+    log.info("[5] Training models...")
     r0 = train_baseline(X_val, y_val, X_test, y_test)
     r1 = train_linear_regression(X_train, y_train, X_val, y_val, X_test, y_test)
     r2 = train_random_forest(X_train, y_train, X_val, y_val, X_test, y_test)
     r3 = train_xgboost(X_train, y_train, X_val, y_val, X_test, y_test)
 
     # Step 6: Compare
-    print("\n[6] Model comparison:")
+    log.info("[6] Building model comparison table...")
     results = [r0, r1, r2, r3]
     cmp_df = build_comparison_table(results)
-    print("\n" + cmp_df.to_string(index=False))
+    log.info("\n%s", cmp_df.to_string(index=False))
     save_comparison_table(cmp_df)
 
     # Step 7: Deep-Dive Evaluation Analytics
-    print("\n[7] Computing regime-stratified and diurnal deep-dive analytics...")
+    log.info("[7] Computing regime-stratified and diurnal deep-dive analytics...")
     predictions = {
         r["model"]: {"val": r["val_preds"], "test": r["test_preds"]}
         for r in results
@@ -123,7 +132,7 @@ def main():
     )
 
     # Step 8: Visual Dashboard Slides Generation
-    print("\n[8] Generating visual evaluation dashboard slides...")
+    log.info("[8] Generating visual evaluation dashboard slides...")
     xgb_history = r3.get("evals_result")
     feat_imp_path = os.path.join(REPORTS_DIR, "feature_importance.csv")
     feat_imp_df = pd.read_csv(feat_imp_path) if os.path.exists(feat_imp_path) else None
@@ -138,16 +147,15 @@ def main():
     )
 
     # Step 9: MLflow Audit Logging (artifact file logging skipped - temp-dir permissions)
-    print("\n[9] Skipping MLflow artifact file logging (temp-dir permission error on this machine).")
+    log.info("[9] Skipping MLflow artifact file logging (temp-dir permission on this machine).")
 
-    print("\n" + "=" * 60)
-    print("  EVALUATION PIPELINE COMPLETE")
-    print(f"  Slide 1: {s1}")
-    print(f"  Slide 2: {s2}")
-    print("  Run: mlflow ui   (then open http://localhost:5000)")
-    print("=" * 60 + "\n")
+    log.info("=" * 60)
+    log.info("EVALUATION PIPELINE COMPLETE")
+    log.info("  Slide 1: %s", s1)
+    log.info("  Slide 2: %s", s2)
+    log.info("  Tip: run 'mlflow ui' then open http://localhost:5000")
+    log.info("=" * 60)
 
 
 if __name__ == "__main__":
     main()
-
