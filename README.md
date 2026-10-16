@@ -31,10 +31,10 @@ The system enforces strict temporal evaluation guarantees: leak-free windowing, 
 Detailed architectural, mathematical, and risk analyses are maintained in the project's formal model card:
 
 - 📄 **[Formal Model Card](energy-monitoring-mlops/docs/model_card.md)**:
-  - **Temporal Validation Protocol**: 80/20 chronological split mechanics with zero forward leakage.
-  - **Empirical Gap Analysis**: Detailed breakdown of the $r \approx 0.83$ autoregressive lag-1 correlation and thermal inertia delays ($30\text{--}90$ minutes).
-  - **Failure Modes**: Persistence step-lag penalties and sensor decoupling limitations.
-  - **Production Architecture**: Recommendations for two-stage regime-switching (Standby vs. Active Burst) and asymmetric loss calibration.
+  - **Temporal Validation Protocol**: Chronological 70/15/15 split mechanics (Train: 13,810 | Val: 2,959 | Test: 2,960 rows) with zero forward look-ahead leakage.
+  - **Empirical Gap Analysis**: Detailed breakdown of the $r \approx 0.83$ autoregressive lag-1 correlation, 54.3% standby concentration ($\le 60\text{ Wh}$), and thermal inertia delays ($30\text{--}90$ minutes).
+  - **Failure Modes & Benchmarks**: Persistence step-lag penalties, tree-based overfitting (XGBoost test $R^2 = 0.0290$), and Linear Regression metric divergence (val $R^2 = 0.5664$, test RMSE = 61.50 Wh vs. MAE lag).
+  - **Production Architecture**: Recommendations for two-stage hurdle regime-switching (Standby Classification vs. Active Burst Regression) and asymmetric loss calibration.
 
 ---
 
@@ -63,9 +63,9 @@ Detailed architectural, mathematical, and risk analyses are maintained in the pr
 ### Why Does Persistence Beat Tree Ensembles?
 Nonlinear models (Random Forest and XGBoost) fail to beat a simple persistence baseline on MAE for three structural reasons:
 
-- **Autoregressive Concentration:** Standby consumption (40–60 Wh) represents >75% of all 10-minute intervals. During idle states, $y_t \approx y_{t-1}$, giving persistence near-zero error.
-- **Impulse Asymmetry:** Spike events (kettles, ovens, washing machines) are short-lived pulses. Tree models partition feature space into leaf-mean estimates, smoothing peak tops and over-predicting descent tails.
-- **Thermal Inertia Lag:** Indoor temperatures ($T_1$–$T_9$) lag appliance heat dissipation by 30–90 minutes. Instantaneous ambient sensors cannot anticipate human-driven appliance activations without historical consumption memory.
+- **Autoregressive Baseline Concentration:** Base standby consumption represents **54.3%** of all 10-minute intervals operating strictly at or below median idle power ($\le 60\text{ Wh}$), with over **75.5%** concentrated below $100\text{ Wh}$. During these dominant idle periods, the series exhibits severe autocorrelation ($r \approx 0.83$ at lag-1), allowing the trivial persistence heuristic ($y_t = y_{t-1}$) to achieve near-zero absolute error and an artificially superior MAE ($26.75\text{ Wh}$).
+- **Impulse Asymmetry & Tree Averaging:** Active burst events (spikes reaching $200\text{--}1,080\text{ Wh}$) occur as sparse, short-duration step functions. Standard tree models partition continuous feature space into leaf-mean estimates, clipping peak crests while systematically over-predicting the steep decay tails—causing XGBoost test performance to collapse ($R^2 = 0.0290$). Conversely, Linear Regression balances variance better against extreme quadratic penalties, securing the lowest test RMSE ($61.50\text{ Wh}$) and highest test $R^2$ ($0.5421$).
+- **Thermal Inertia & Sensor Decoupling:** Environmental signals ($T_1\text{--}T_9$, $RH_1\text{--}RH_9$) lag appliance joule heating and thermal dissipation by 30–90 minutes. Instantaneous ambient sensors cannot anticipate human-driven activation triggers without explicit autoregressive lookback windows, directly justifying a two-stage hurdle architecture (idle classification followed by burst-state regression).
 
 *For complete mathematical and architectural derivations, read the [Formal Model Card](energy-monitoring-mlops/docs/model_card.md).*
 
