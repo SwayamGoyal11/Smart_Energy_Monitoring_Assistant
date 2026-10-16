@@ -19,8 +19,8 @@ total absolute error. Nothing in the production pipeline is modified.
 Caveat (stated in the output): regimes are defined from the true target, so
 this is a diagnostic of WHERE errors occur, not a deployable stratification.
 
-Outputs -> reports/evidence/regime_analysis/
-    regime_metrics.csv, E3_regime_mae.png
+Outputs -> reports/evidence/regime_analysis/regime_metrics.csv
+          reports/figures/E3_regime_mae.png
 
 Run from project root:  python experiments/03_regime_analysis.py
 """
@@ -51,7 +51,9 @@ from src.models.evaluate import compute_metrics                      # noqa: E40
 warnings.filterwarnings("ignore")
 
 OUT_DIR = os.path.join(PROJECT_ROOT, "reports", "evidence", "regime_analysis")
+FIG_DIR = os.path.join(PROJECT_ROOT, "reports", "figures")
 os.makedirs(OUT_DIR, exist_ok=True)
+os.makedirs(FIG_DIR, exist_ok=True)
 
 REGIMES = {
     "Standby (<=60)": lambda y: y <= 60,
@@ -160,7 +162,7 @@ def plot(res: pd.DataFrame):
         ax.grid(axis="y", alpha=0.3)
     axes[0].legend()
     fig.tight_layout()
-    fig.savefig(os.path.join(OUT_DIR, "E3_regime_mae.png"), dpi=150)
+    fig.savefig(os.path.join(FIG_DIR, "E3_regime_mae.png"), dpi=150)
     plt.close(fig)
 
 

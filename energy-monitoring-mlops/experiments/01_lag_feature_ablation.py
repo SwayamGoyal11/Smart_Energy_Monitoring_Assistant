@@ -17,7 +17,8 @@ Models: Linear Regression, Random Forest, XGBoost (same hyper-parameters as
 src/models/train.py). Metrics: MAE, RMSE, R2 on validation and test.
 
 Outputs -> reports/evidence/lag_ablation/
-    ablation_group_results.csv, ablation_lag_depth_results.csv,
+    ablation_group_results.csv, ablation_lag_depth_results.csv
+         reports/figures/
     L1_group_ablation.png, L2_lag_depth_sweep.png
 
 Run from project root:  python experiments/01_lag_feature_ablation.py
@@ -50,7 +51,9 @@ from src.models.evaluate import compute_metrics                    # noqa: E402
 warnings.filterwarnings("ignore")
 
 OUT_DIR = os.path.join(PROJECT_ROOT, "reports", "evidence", "lag_ablation")
+FIG_DIR = os.path.join(PROJECT_ROOT, "reports", "figures")
 os.makedirs(OUT_DIR, exist_ok=True)
+os.makedirs(FIG_DIR, exist_ok=True)
 
 MAX_LAG = 144          # 1 day of 10-min steps; rows dropped uniformly
 SEED = 42
@@ -179,7 +182,7 @@ def plot_groups(res: pd.DataFrame, pers_test_mae: float):
     ax.set_title("Feature-group ablation (lower is better)")
     ax.legend()
     fig.tight_layout()
-    fig.savefig(os.path.join(OUT_DIR, "L1_group_ablation.png"), dpi=150)
+    fig.savefig(os.path.join(FIG_DIR, "L1_group_ablation.png"), dpi=150)
     plt.close(fig)
 
 
@@ -202,7 +205,7 @@ def plot_depth(res: pd.DataFrame, pers_test_mae: float):
     axes[0].set_title("Lag-depth sweep: error")
     axes[1].set_title("Lag-depth sweep: R2")
     fig.tight_layout()
-    fig.savefig(os.path.join(OUT_DIR, "L2_lag_depth_sweep.png"), dpi=150)
+    fig.savefig(os.path.join(FIG_DIR, "L2_lag_depth_sweep.png"), dpi=150)
     plt.close(fig)
 
 
