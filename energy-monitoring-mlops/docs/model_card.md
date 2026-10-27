@@ -85,7 +85,7 @@ Every candidate is registered as a version of `energy-forecaster`, tagged with `
 - `staging`: latest candidate that passed the gates.
 - `champion`: the gated candidate with the lowest validation RMSE (the serving model). Test data is a pass/fail check only, never used to pick between models.
 
-Current champion: Two-Stage Hurdle, `energy-forecaster` version 1 (served from `models/champion/` via `scripts/export_champion.py`).
+Current champion: Two-Stage Hurdle, `energy-forecaster` version 5 (served from `models/champion/` via `scripts/export_champion.py`). Versions 4 and 5 re-log the same fitted model first registered as version 1, with identical predictions and metrics; they refresh only its recorded dependencies (v5 records the inference-only requirements from `requirements-serve.txt`). Each re-log carries a `relogged_from` version tag.
 
 The same gates run in CI on every push and pull request (`.github/workflows/ci.yml`, quality-gate job), so a change that degrades the candidates below threshold fails the build.
 

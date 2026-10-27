@@ -9,6 +9,7 @@ import mlflow
 import numpy as np
 import pytest
 from mlflow.tracking import MlflowClient
+from packaging.requirements import Requirement
 from sklearn.dummy import DummyRegressor
 from sklearn.linear_model import LinearRegression
 from xgboost import XGBRegressor
@@ -18,7 +19,8 @@ from src.features.feature_engineering import build_feature_matrix, chronological
 from src.models.hurdle import HurdleModel
 from src.models.quality_gates import QualityThresholds
 from src.models.registry import (
-    CHAMPION_ALIAS, STAGING_ALIAS, register_candidate, tracking_uri,
+    CHAMPION_ALIAS, INFERENCE_REQUIREMENTS, STAGING_ALIAS, XGBOOST_REQUIREMENT,
+    register_candidate, tracking_uri,
 )
 from src.validation.input_validation import validate_feature_frame
 
@@ -128,6 +130,19 @@ class TestGatedRegistration:
         assert run.data.metrics["quality_gate_passed"] == 1
         for key in ("val_mae", "val_rmse", "val_r2", "test_rmse", "baseline_val_rmse"):
             assert key in run.data.metrics
+
+    def test_logged_requirements_are_inference_only(self, store, splits, fit):
+        for model, model_type, expected in [
+            (LinearRegression(), "linear_regression", INFERENCE_REQUIREMENTS),
+            (XGBRegressor(n_estimators=10), "xgboost", INFERENCE_REQUIREMENTS + [XGBOOST_REQUIREMENT]),
+        ]:
+            result = register(fit(model), model_type, splits)
+            path = mlflow.artifacts.download_artifacts(
+                f"models:/{MODEL_NAME}/{result.version}/requirements.txt")
+            with open(path) as f:
+                logged = f.read().split()
+            # MLflow rewrites specifiers in canonical order, so compare parsed
+            assert [Requirement(r) for r in logged] == [Requirement(r) for r in expected]
 
     def test_champion_loads_and_predicts(self, store, splits):
         _, _, test = splits

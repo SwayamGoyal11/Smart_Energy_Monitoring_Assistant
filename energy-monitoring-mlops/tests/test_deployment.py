@@ -164,6 +164,11 @@ class TestServeRequirements:
         assert {"fastapi", "uvicorn", "mlflow-skinny", "skops", "prometheus-client"} <= names
         assert not names & {"mlflow", "evidently", "zenml", "jupyter", "dvc", "pytest", "matplotlib"}
 
+    def test_model_requirements_match_serve_requirements(self):
+        from src.models.registry import INFERENCE_REQUIREMENTS, XGBOOST_REQUIREMENT
+        serve = set(read("requirements-serve.txt").splitlines())
+        assert set(INFERENCE_REQUIREMENTS + [XGBOOST_REQUIREMENT]) <= serve
+
     def test_api_does_not_import_training_only_packages(self):
         code = ("import sys; import src.api.app; "
                 "print(sorted(m for m in ('evidently', 'zenml', 'matplotlib', 'dvc') if m in sys.modules))")

@@ -56,7 +56,7 @@ flowchart LR
 
 ## Production champion: two-stage hurdle model
 
-The serving model is **`energy-forecaster` version 1** (alias `@champion`), a two-stage hurdle model (`src/models/hurdle.py`) built for the target's heavy standby skew: the median interval is 60 Wh and about 79% of intervals sit at or below 100 Wh, with short bursts up to ~1,080 Wh.
+The serving model is **`energy-forecaster` version 5** (aliases `@champion` and `@staging`), a two-stage hurdle model (`src/models/hurdle.py`) built for the target's heavy standby skew: the median interval is 60 Wh and about 79% of intervals sit at or below 100 Wh, with short bursts up to ~1,080 Wh.
 
 1. **Stage 1, regime classifier:** standardized logistic regression predicts whether the interval is an active burst (`Appliances > 100 Wh`, ~22% of training intervals).
 2. **Stage 2, load-intensity regressor:** a HistGradientBoosting regressor trained on active intervals only.
@@ -94,6 +94,7 @@ The full evaluation, failure modes and limitations are in the **[model card](ene
 - Passing candidates get `@staging`; the passing candidate with the lowest validation RMSE also gets `@champion`.
 - Failing candidates are still registered (tagged `quality_gate=failed`) for audit, but receive no alias and are never served.
 - The script exits non-zero if no candidate passes, which is what fails the CI quality-gate job.
+- Each logged model records only its inference dependencies (`INFERENCE_REQUIREMENTS` in `src/models/registry.py`, kept equal to the ranges in `requirements-serve.txt` by a test), so loading it in the serving image raises no dependency-mismatch warnings.
 
 ---
 
@@ -106,7 +107,7 @@ Runs on every push to `main`, every `v*.*.*` tag push, and every pull request.
 | Job | What it checks |
 |---|---|
 | Lint & code quality | `ruff check` with the rules in `ruff.toml` (pyflakes + syntax/statement errors) |
-| PyTest suite | All 241 tests (data, features, hurdle, input validation, model quality, registry, API, monitoring, deployment config), with coverage |
+| PyTest suite | All 243 tests (data, features, hurdle, input validation, model quality, registry, API, monitoring, deployment config), with coverage |
 | Docker build verification | Builds the image with the `type=gha` layer cache, imports the app inside it, asserts it runs as uid 10001 |
 | Quality gate check | Runs `run_registry.py` against a throwaway MLflow store; fails if no candidate passes the gates |
 
@@ -206,7 +207,7 @@ python -m mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5000   # http
 ### 4. Run the tests
 
 ```bash
-python -m pytest tests -q          # 241 tests, ~3 minutes
+python -m pytest tests -q          # 243 tests, ~3 minutes
 python -m ruff check .             # same lint gate as CI (install with: uv pip install ruff)
 ```
 
@@ -305,7 +306,7 @@ Invoke-RestMethod -Method Post -Uri http://localhost:8000/predict -ContentType "
 Response:
 
 ```json
-{"target_timestamp": "2016-05-20T18:00:00", "predicted_appliances_wh": 180.0, "model_name": "energy-forecaster", "model_version": "1"}
+{"target_timestamp": "2016-05-20T18:00:00", "predicted_appliances_wh": 180.0, "model_name": "energy-forecaster", "model_version": "5"}
 ```
 
 Out-of-range sensor values, non-finite numbers, unknown fields and short histories are rejected with 422.
@@ -368,7 +369,7 @@ energy-monitoring-mlops/
 │   ├── validation/                   # physical-bounds input validation
 │   ├── serving/, api/                # Pydantic contract, FastAPI app, model loader
 │   └── monitoring/                   # Prometheus metrics, inference log, Evidently drift
-├── tests/                            # 241 PyTest tests
+├── tests/                            # 243 PyTest tests
 ├── scripts/export_champion.py        # registry alias -> models/champion/
 ├── run_pipeline.py                   # Phase 1 benchmark pipeline
 ├── run_registry.py                   # train, gate, register
@@ -402,9 +403,9 @@ energy-monitoring-mlops/
 
 ### Phase 2: Productionization and deployment (complete)
 
-- [x] PyTest suite: 241 tests across data, model quality, registry, API, monitoring and deployment config
+- [x] PyTest suite: 243 tests across data, model quality, registry, API, monitoring and deployment config
 - [x] Model-risk quality gates against fixed thresholds and the persistence baseline
-- [x] Two-stage hurdle model promoted as champion (`energy-forecaster` v1)
+- [x] Two-stage hurdle model promoted as champion (`energy-forecaster` v5)
 - [x] MLflow Model Registry with `staging` / `champion` aliases
 - [x] FastAPI inference service with Pydantic contract validation
 - [x] Prometheus metrics, alert rules and Grafana dashboard

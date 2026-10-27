@@ -45,6 +45,19 @@ SKOPS_TRUSTED_TYPES = [
     "src.models.hurdle.HurdleModel",
 ]
 
+# Requirements recorded with each logged model: only what inference imports,
+# using the ranges in requirements-serve.txt. Without this MLflow infers exact
+# pins from the training env (plus pytest, rich, psutil), and the serving
+# image warns about mismatches on every model load.
+INFERENCE_REQUIREMENTS = [
+    "mlflow-skinny>=3.17.0,<4.0.0",
+    "pandas>=2.3.0,<3.0.0",
+    "numpy>=2.0.0,<3.0.0",
+    "scikit-learn>=1.8.0,<2.0.0",
+    "skops>=0.16.0,<1.0.0",
+]
+XGBOOST_REQUIREMENT = "xgboost>=3.4.0,<4.0.0"
+
 
 @dataclass
 class RegistrationResult:
@@ -81,9 +94,13 @@ def _split_metrics(model, frame: pd.DataFrame) -> tuple:
 def _log_model(model, example: pd.DataFrame):
     """Log with the native flavor: XGBoost boosters are not skops-serializable."""
     if isinstance(model, XGBModel):
-        return mlflow.xgboost.log_model(model, name="model", input_example=example)
+        return mlflow.xgboost.log_model(
+            model, name="model", input_example=example,
+            pip_requirements=INFERENCE_REQUIREMENTS + [XGBOOST_REQUIREMENT],
+        )
     return mlflow.sklearn.log_model(
         model, name="model", input_example=example, skops_trusted_types=SKOPS_TRUSTED_TYPES,
+        pip_requirements=INFERENCE_REQUIREMENTS,
     )
 
 
