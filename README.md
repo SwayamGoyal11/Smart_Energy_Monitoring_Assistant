@@ -133,40 +133,55 @@ git push origin v1.0.0     # CI runs on the tag; CD publishes only if it is gree
 
 ## Local development
 
+Every command block below is labelled **PowerShell** (Windows PowerShell 5.1 or PowerShell 7) or **bash** (Linux/macOS, or Git Bash/WSL on Windows). Blocks labelled **PowerShell or bash** run unchanged in either shell. All commands after the install step assume you are in `energy-monitoring-mlops/` with the virtual environment activated.
+
 ### Prerequisites
 
 - Python 3.12
-- [uv](https://docs.astral.sh/uv/) (or plain `pip`)
 - Docker Desktop (or Docker Engine with the Compose plugin)
 - Git
 
+[uv](https://docs.astral.sh/uv/) is optional; nothing below requires it on your `PATH`.
+
 ### 1. Install
 
-PowerShell:
+**PowerShell**
 
 ```powershell
 git clone https://github.com/SwayamGoyal11/Smart_Energy_Monitoring_Assistant.git
 cd Smart_Energy_Monitoring_Assistant\energy-monitoring-mlops
-uv venv --python 3.12 venv
+py -3.12 -m venv venv
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
 .\venv\Scripts\Activate.ps1
-uv pip install -r requirements.txt
+python -m pip install -r requirements.txt
+python -m pip install ruff
 ```
 
-bash:
+`Set-ExecutionPolicy ... -Scope Process` allows `Activate.ps1` to run in the current window only. Run it again in each new PowerShell window before activating. `py -3.12` is the Windows Python launcher. If `python --version` already reports 3.12, `python -m venv venv` works too.
+
+**bash**
 
 ```bash
 git clone https://github.com/SwayamGoyal11/Smart_Energy_Monitoring_Assistant.git
 cd Smart_Energy_Monitoring_Assistant/energy-monitoring-mlops
-uv venv --python 3.12 venv
+python3.12 -m venv venv
 source venv/bin/activate
-uv pip install -r requirements.txt
+python -m pip install -r requirements.txt
+python -m pip install ruff
 ```
 
-`requirements.txt` is the full development environment; `requirements-serve.txt` is the slim runtime the Docker image installs.
+`requirements.txt` is the full development environment; `requirements-serve.txt` is the slim runtime the Docker image installs. For faster installs, `python -m pip install uv` and then `python -m uv pip install -r requirements.txt` gives the same result.
+
+To reactivate the environment in a new terminal:
+
+| Shell | Command (from `energy-monitoring-mlops/`) |
+|---|---|
+| PowerShell | `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process; .\venv\Scripts\Activate.ps1` |
+| bash | `source venv/bin/activate` |
 
 ### 2. Get the dataset
 
-**With DVC** (on a machine that has the configured remote, `../dvc_storage_remote`):
+**With DVC** (on a machine that has the configured remote, `../dvc_storage_remote`). **PowerShell or bash:**
 
 ```bash
 python -m dvc pull
@@ -174,7 +189,7 @@ python -m dvc pull
 
 **Without the DVC remote**, download the public copy and check it matches the DVC pointer (MD5 `69ef922b5fcafcd49097cfc09e07167e`):
 
-PowerShell:
+**PowerShell**
 
 ```powershell
 Invoke-WebRequest -Uri "https://archive.ics.uci.edu/static/public/374/appliances+energy+prediction.zip" -OutFile "$env:TEMP\energydata.zip"
@@ -182,36 +197,44 @@ Expand-Archive -Path "$env:TEMP\energydata.zip" -DestinationPath data\raw -Force
 (Get-FileHash data\raw\energydata_complete.csv -Algorithm MD5).Hash   # 69EF922B5FCAFCD49097CFC09E07167E
 ```
 
-bash:
+**bash**
 
 ```bash
 curl -fsSL -o /tmp/energydata.zip "https://archive.ics.uci.edu/static/public/374/appliances+energy+prediction.zip"
 unzip -o -j /tmp/energydata.zip energydata_complete.csv -d data/raw
-md5sum data/raw/energydata_complete.csv                            # 69ef922b5fcafcd49097cfc09e07167e
+md5sum data/raw/energydata_complete.csv                            # 69ef922b5fcafcd49097cfc09e07167e (macOS: md5)
 ```
 
 ### 3. Train, gate and export
 
-```bash
-python run_pipeline.py            # Phase 1 benchmarks; writes data/processed/features.csv
-python run_registry.py            # train hurdle + linear_regression, apply gates, register
-python scripts/export_champion.py # @champion -> models/champion/ (what the container serves)
-```
-
-`python run_registry.py --models hurdle linear_regression random_forest xgboost` trains every candidate. Browse runs and the registry with:
+**PowerShell or bash**
 
 ```bash
-python -m mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5000   # http://localhost:5000
+python run_pipeline.py
+python run_registry.py
+python scripts/export_champion.py
 ```
 
-### 4. Run the tests
+- `run_pipeline.py` runs the Phase 1 benchmarks and writes `data/processed/features.csv`.
+- `run_registry.py` trains hurdle + linear_regression, applies the gates and registers them. Add `--models hurdle linear_regression random_forest xgboost` to train every candidate.
+- `export_champion.py` copies `@champion` to `models/champion/`, which is what the container serves.
+
+Browse runs and the registry at http://localhost:5000 with:
 
 ```bash
-python -m pytest tests -q          # 243 tests, ~3 minutes
-python -m ruff check .             # same lint gate as CI (install with: uv pip install ruff)
+python -m mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5000
 ```
 
-Tests that touch the registry or API build throwaway MLflow stores under pytest's `tmp_path`; they never read or write the project's `mlflow.db`.
+### 4. Run the tests and lint
+
+**PowerShell or bash**
+
+```bash
+python -m pytest tests -q
+python -m ruff check .
+```
+
+`pytest` runs 243 tests in about 3 minutes; `ruff` applies the same lint gate as CI. Tests that touch the registry or API build throwaway MLflow stores under pytest's `tmp_path` and never read or write the project's `mlflow.db`.
 
 ---
 
@@ -221,20 +244,21 @@ The image does not bake in a model. It serves the MLflow model directory mounted
 
 ### Full stack: API + Prometheus + Grafana (Docker Compose)
 
-PowerShell:
+**PowerShell**
 
 ```powershell
-$env:GRAFANA_ADMIN_PASSWORD = "change-me"
-docker compose up --build -d
-docker compose ps                  # api should report "healthy"
-```
-
-bash:
-
-```bash
-GRAFANA_ADMIN_PASSWORD=change-me docker compose up --build -d
+$env:GRAFANA_ADMIN_PASSWORD = "change-me"; docker compose up -d --build
 docker compose ps
 ```
+
+**bash**
+
+```bash
+GRAFANA_ADMIN_PASSWORD=change-me docker compose up -d --build
+docker compose ps
+```
+
+Wait until `docker compose ps` shows the `energy-api` container as `healthy` (about 30 seconds).
 
 | Service | URL | Notes |
 |---|---|---|
@@ -246,25 +270,21 @@ Compose mounts `./models/champion` and `./reports/evidence` read-only into the A
 
 ### Standalone container from GHCR
 
-bash:
-
-```bash
-docker pull ghcr.io/swayamgoyal11/energy-forecaster-api:latest
-docker run -d --name energy-api -p 8000:8000 \
-  -v "${PWD}/models/champion:/app/models/champion:ro" \
-  ghcr.io/swayamgoyal11/energy-forecaster-api:latest
-```
-
-PowerShell:
+**PowerShell**
 
 ```powershell
 docker pull ghcr.io/swayamgoyal11/energy-forecaster-api:latest
-docker run -d --name energy-api -p 8000:8000 `
-  -v "${PWD}\models\champion:/app/models/champion:ro" `
-  ghcr.io/swayamgoyal11/energy-forecaster-api:latest
+docker run -d --name energy-api -p 8000:8000 -v "${PWD}\models\champion:/app/models/champion:ro" ghcr.io/swayamgoyal11/energy-forecaster-api:latest
 ```
 
-Pin `:sha-<short>` or a release tag such as `:1.0.0` instead of `:latest` for reproducible deploys. If the package is private, run `docker login ghcr.io` first with a personal access token that has `read:packages`.
+**bash**
+
+```bash
+docker pull ghcr.io/swayamgoyal11/energy-forecaster-api:latest
+docker run -d --name energy-api -p 8000:8000 -v "${PWD}/models/champion:/app/models/champion:ro" ghcr.io/swayamgoyal11/energy-forecaster-api:latest
+```
+
+Stop the compose stack first (`docker compose down`), since both use port 8000 and the container name `energy-api`. Pin `:sha-<short>` or a release tag such as `:1.0.0` instead of `:latest` for reproducible deploys. If the package is private, run `docker login ghcr.io` first with a personal access token that has `read:packages`.
 
 ### Endpoints
 
@@ -276,40 +296,46 @@ Pin `:sha-<short>` or a release tag such as `:1.0.0` instead of `:latest` for re
 | GET | `/model-info` | Registry version, model type and quality-gate metrics of the served model |
 | GET | `/metrics` | Prometheus exposition |
 
-Clients send raw readings, not engineered features: the target timestamp, the last 6 or more appliance readings (oldest first), and the current sensor values. Save this as `payload.json`:
+Clients send raw readings, not engineered features:
 
-```json
-{
-  "target_timestamp": "2016-05-20T18:00:00",
-  "recent_appliances_wh": [60, 50, 50, 60, 230, 180],
-  "lights": 0, "T1": 22.5, "RH_1": 40.2, "T2": 21.1, "RH_2": 37.8,
-  "T3": 23.0, "RH_3": 38.1, "T6": 14.6, "RH_6": 48.0, "T_out": 13.8,
-  "Press_mm_hg": 756.0, "RH_out": 71.0, "Windspeed": 3.5,
-  "Visibility": 40.0, "Tdewpoint": 8.6
-}
+- `target_timestamp`: the start of the 10-minute interval to forecast.
+- `recent_appliances_wh`: the last 6 or more appliance readings, oldest first.
+- `lights` plus the 14 sensor values the model uses.
+
+The request schema rejects unknown fields, so the raw dataset's unused sensors (`T4`, `RH_4`, `T5`, `RH_5`, `T7`-`T9`, `RH_7`-`RH_9`) must be left out.
+
+### Send a prediction
+
+**PowerShell**: use `Invoke-RestMethod`. In Windows PowerShell 5.1, `curl` is an alias for `Invoke-WebRequest` and rejects curl's flags.
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8000/health"
+$body = '{"target_timestamp": "2016-01-11T18:00:00", "recent_appliances_wh": [60.0, 50.0, 50.0, 60.0, 60.0, 50.0], "lights": 30.0, "T1": 19.89, "RH_1": 47.596, "T2": 19.2, "RH_2": 44.79, "T3": 19.79, "RH_3": 44.4, "T6": 7.026, "RH_6": 84.256, "T_out": 6.6, "Press_mm_hg": 733.5, "RH_out": 92.0, "Windspeed": 7.0, "Visibility": 63.0, "Tdewpoint": 5.3}'
+Invoke-RestMethod -Uri "http://localhost:8000/predict" -Method Post -Body $body -ContentType "application/json"
 ```
 
-bash:
+**bash**
 
 ```bash
 curl -s http://localhost:8000/health
-curl -s -X POST http://localhost:8000/predict -H "Content-Type: application/json" -d @payload.json
-```
-
-PowerShell (in Windows PowerShell `curl` is an alias for `Invoke-WebRequest`, so use `Invoke-RestMethod` or `curl.exe`):
-
-```powershell
-Invoke-RestMethod http://localhost:8000/health
-Invoke-RestMethod -Method Post -Uri http://localhost:8000/predict -ContentType "application/json" -InFile payload.json
+PAYLOAD='{"target_timestamp": "2016-01-11T18:00:00", "recent_appliances_wh": [60.0, 50.0, 50.0, 60.0, 60.0, 50.0], "lights": 30.0, "T1": 19.89, "RH_1": 47.596, "T2": 19.2, "RH_2": 44.79, "T3": 19.79, "RH_3": 44.4, "T6": 7.026, "RH_6": 84.256, "T_out": 6.6, "Press_mm_hg": 733.5, "RH_out": 92.0, "Windspeed": 7.0, "Visibility": 63.0, "Tdewpoint": 5.3}'
+curl -s -X POST http://localhost:8000/predict -H "Content-Type: application/json" -d "$PAYLOAD"
 ```
 
 Response:
 
 ```json
-{"target_timestamp": "2016-05-20T18:00:00", "predicted_appliances_wh": 180.0, "model_name": "energy-forecaster", "model_version": "5"}
+{"target_timestamp": "2016-01-11T18:00:00", "predicted_appliances_wh": 50.0, "model_name": "energy-forecaster", "model_version": "5"}
 ```
 
-Out-of-range sensor values, non-finite numbers, unknown fields and short histories are rejected with 422.
+To use real cURL from Windows PowerShell, call `curl.exe` explicitly and send the body from a file. Windows PowerShell 5.1 strips the inner double quotes from inline JSON arguments, and the API then returns `JSON decode error`. Quote `"@payload.json"`, because a bare `@` is PowerShell's splatting operator.
+
+```powershell
+$body | Out-File -Encoding ascii payload.json
+curl.exe -s -X POST http://localhost:8000/predict -H "Content-Type: application/json" --data "@payload.json"
+```
+
+Out-of-range sensor values, non-finite numbers, unknown fields, missing fields and short histories are rejected with 422.
 
 ---
 
@@ -329,21 +355,55 @@ Out-of-range sensor values, non-finite numbers, unknown fields and short histori
 
 Grafana provisions the **Energy Forecaster - Serving & Drift** dashboard automatically: service health, `/predict` latency p50/p95/p99, 5xx ratio, prediction quantiles, hurdle active-stage ratio and per-column drift scores. Prometheus evaluates `prometheus/alerts.yml`: API down, 5xx ratio > 5%, `/predict` p95 > 250 ms, drift detected, and active-stage ratio > 50% for 30 minutes (training baseline ~22%).
 
+### Generate telemetry
+
+A fresh stack has served no predictions, so most panels show "No data". Right after `docker compose up`, send 15 predictions about one second apart:
+
+**PowerShell**
+
+```powershell
+$body = '{"target_timestamp": "2016-01-11T18:00:00", "recent_appliances_wh": [60.0, 50.0, 50.0, 60.0, 60.0, 50.0], "lights": 30.0, "T1": 19.89, "RH_1": 47.596, "T2": 19.2, "RH_2": 44.79, "T3": 19.79, "RH_3": 44.4, "T6": 7.026, "RH_6": 84.256, "T_out": 6.6, "Press_mm_hg": 733.5, "RH_out": 92.0, "Windspeed": 7.0, "Visibility": 63.0, "Tdewpoint": 5.3}'
+1..15 | ForEach-Object { $r = Invoke-RestMethod -Uri "http://localhost:8000/predict" -Method Post -Body $body -ContentType "application/json"; Write-Host "request $_ -> $($r.predicted_appliances_wh) Wh"; Start-Sleep -Seconds 1 }
+```
+
+**bash**
+
+```bash
+PAYLOAD='{"target_timestamp": "2016-01-11T18:00:00", "recent_appliances_wh": [60.0, 50.0, 50.0, 60.0, 60.0, 50.0], "lights": 30.0, "T1": 19.89, "RH_1": 47.596, "T2": 19.2, "RH_2": 44.79, "T3": 19.79, "RH_3": 44.4, "T6": 7.026, "RH_6": 84.256, "T_out": 6.6, "Press_mm_hg": 733.5, "RH_out": 92.0, "Windspeed": 7.0, "Visibility": 63.0, "Tdewpoint": 5.3}'
+for i in $(seq 1 15); do echo "request $i -> $(curl -s -X POST http://localhost:8000/predict -H "Content-Type: application/json" -d "$PAYLOAD")"; sleep 1; done
+```
+
+Then open the dashboard at http://localhost:3000/d/energy-forecaster?from=now-5m&to=now&refresh=5s. That link sets the time range to **Last 5 minutes** and auto-refresh to **5s**; you can also set both from the time picker and refresh menu at the top right. By default the dashboard shows the last 6 hours and refreshes every 30s, which makes a short burst of traffic hard to see. Prometheus scrapes every 15 seconds, so new requests appear within about 15-30 seconds.
+
 ### Drift reports (Evidently)
 
 Drift compares a current window of model inputs and predictions against the training split. Calendar features are excluded, since production data always comes from a later date than training. Generate `data/processed/features.csv` first with `python run_pipeline.py`.
 
-```bash
-# Baseline: the held-out test split stands in for production traffic
-python -m src.monitoring.drift
+To use the held-out test split as a stand-in for production traffic (**PowerShell or bash**):
 
-# Real traffic: copy the API's inference log out of the compose volume
-mkdir -p data/monitoring           # PowerShell: New-Item -ItemType Directory -Force data\monitoring
+```bash
+python -m src.monitoring.drift
+```
+
+To score real traffic, copy the API's inference log out of the compose volume first. The log needs at least 200 served predictions; with fewer, the command prints `Drift check skipped: current has N rows` and exits with code 1. To try it on a fresh stack, rerun the telemetry loop above with `1..200` (PowerShell) or `seq 1 200` (bash) and drop the sleep. Repeating a single sample payload is deliberately unrealistic traffic, so expect every feature to be flagged as drifted. The running API picks up the new `drift_metrics.json`, so `model_drift_detected` reads 1 and the `EnergyModelDriftDetected` alert fires after 5 minutes. Run `python -m src.monitoring.drift` again to go back to the test-split report. That report also flags drift (20 of 21 features), because the test window comes later in the season than the training data.
+
+**PowerShell**
+
+```powershell
+New-Item -ItemType Directory -Force data\monitoring | Out-Null
+docker cp energy-api:/app/data/monitoring/inference_log.csv data\monitoring\inference_log.csv
+python -m src.monitoring.drift --current data/monitoring/inference_log.csv
+```
+
+**bash**
+
+```bash
+mkdir -p data/monitoring
 docker cp energy-api:/app/data/monitoring/inference_log.csv data/monitoring/inference_log.csv
 python -m src.monitoring.drift --current data/monitoring/inference_log.csv
-
-# Options: --method {wasserstein,ks}  --threshold <float>  --fail-on-drift (exit 2 on any alert)
 ```
+
+Options: `--method wasserstein|ks`, `--threshold <float>`, and `--fail-on-drift`, which exits with code 2 when any alert fires.
 
 Outputs:
 
