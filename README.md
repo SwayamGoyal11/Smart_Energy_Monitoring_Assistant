@@ -150,25 +150,29 @@ Every command block below is labelled **PowerShell** (Windows PowerShell 5.1 or 
 ```powershell
 git clone https://github.com/SwayamGoyal11/Smart_Energy_Monitoring_Assistant.git
 cd Smart_Energy_Monitoring_Assistant\energy-monitoring-mlops
-py -3.12 -m venv venv
+python -m venv venv
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
 .\venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-python -m pip install ruff
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+pip install ruff
 ```
 
-`Set-ExecutionPolicy ... -Scope Process` allows `Activate.ps1` to run in the current window only. Run it again in each new PowerShell window before activating. `py -3.12` is the Windows Python launcher. If `python --version` already reports 3.12, `python -m venv venv` works too.
+`Set-ExecutionPolicy ... -Scope Process` allows `Activate.ps1` to run in the current window only. Run it again in each new PowerShell window before activating. `python` must be Python 3.12. If several versions are installed, create the environment with the Windows launcher instead: `py -3.12 -m venv venv`.
 
 **bash**
 
 ```bash
 git clone https://github.com/SwayamGoyal11/Smart_Energy_Monitoring_Assistant.git
 cd Smart_Energy_Monitoring_Assistant/energy-monitoring-mlops
-python3.12 -m venv venv
-source venv/bin/activate
-python -m pip install -r requirements.txt
-python -m pip install ruff
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+pip install ruff
 ```
+
+`python3` must be Python 3.12 (otherwise use `python3.12 -m venv .venv`). `ruff` is installed separately because `requirements.txt` doesn't include it, and the lint command in step 4 needs it.
 
 `requirements.txt` is the full development environment; `requirements-serve.txt` is the slim runtime the Docker image installs. For faster installs, `python -m pip install uv` and then `python -m uv pip install -r requirements.txt` gives the same result.
 
@@ -177,7 +181,7 @@ To reactivate the environment in a new terminal:
 | Shell | Command (from `energy-monitoring-mlops/`) |
 |---|---|
 | PowerShell | `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process; .\venv\Scripts\Activate.ps1` |
-| bash | `source venv/bin/activate` |
+| bash | `source .venv/bin/activate` |
 
 ### 2. Get the dataset
 
@@ -304,34 +308,47 @@ Clients send raw readings, not engineered features:
 
 The request schema rejects unknown fields, so the raw dataset's unused sensors (`T4`, `RH_4`, `T5`, `RH_5`, `T7`-`T9`, `RH_7`-`RH_9`) must be left out.
 
-### Send a prediction
+### Single Prediction Example (API Contract)
 
-**PowerShell**: use `Invoke-RestMethod`. In Windows PowerShell 5.1, `curl` is an alias for `Invoke-WebRequest` and rejects curl's flags.
+One valid `/predict` request. Every field shown is required, and any other field is rejected.
+
+**PowerShell** (`Invoke-RestMethod`; in Windows PowerShell 5.1 `curl` is an alias for `Invoke-WebRequest` and rejects curl's flags)
 
 ```powershell
-Invoke-RestMethod -Uri "http://localhost:8000/health"
-$body = '{"target_timestamp": "2016-01-11T18:00:00", "recent_appliances_wh": [60.0, 50.0, 50.0, 60.0, 60.0, 50.0], "lights": 30.0, "T1": 19.89, "RH_1": 47.596, "T2": 19.2, "RH_2": 44.79, "T3": 19.79, "RH_3": 44.4, "T6": 7.026, "RH_6": 84.256, "T_out": 6.6, "Press_mm_hg": 733.5, "RH_out": 92.0, "Windspeed": 7.0, "Visibility": 63.0, "Tdewpoint": 5.3}'
-Invoke-RestMethod -Uri "http://localhost:8000/predict" -Method Post -Body $body -ContentType "application/json"
+$payload = @{
+  target_timestamp = "2026-10-27T21:30:00"
+  lights = 10.0
+  T1 = 19.89; RH_1 = 47.596; T2 = 19.2; RH_2 = 44.79; T3 = 19.79; RH_3 = 44.4
+  T6 = 7.026; RH_6 = 84.256; T_out = 6.6; Press_mm_hg = 733.5; RH_out = 92.0
+  Windspeed = 7.0; Visibility = 63.0; Tdewpoint = 5.3
+  recent_appliances_wh = @(60.0, 50.0, 50.0, 60.0, 60.0, 50.0)
+} | ConvertTo-Json
+Invoke-RestMethod -Uri "http://localhost:8000/predict" -Method Post -Body $payload -ContentType "application/json"
 ```
 
 **bash**
 
 ```bash
-curl -s http://localhost:8000/health
-PAYLOAD='{"target_timestamp": "2016-01-11T18:00:00", "recent_appliances_wh": [60.0, 50.0, 50.0, 60.0, 60.0, 50.0], "lights": 30.0, "T1": 19.89, "RH_1": 47.596, "T2": 19.2, "RH_2": 44.79, "T3": 19.79, "RH_3": 44.4, "T6": 7.026, "RH_6": 84.256, "T_out": 6.6, "Press_mm_hg": 733.5, "RH_out": 92.0, "Windspeed": 7.0, "Visibility": 63.0, "Tdewpoint": 5.3}'
-curl -s -X POST http://localhost:8000/predict -H "Content-Type: application/json" -d "$PAYLOAD"
+curl -s -X POST http://localhost:8000/predict -H "Content-Type: application/json" -d '{
+  "target_timestamp": "2026-10-27T21:30:00",
+  "lights": 10.0,
+  "T1": 19.89, "RH_1": 47.596, "T2": 19.2, "RH_2": 44.79, "T3": 19.79, "RH_3": 44.4,
+  "T6": 7.026, "RH_6": 84.256, "T_out": 6.6, "Press_mm_hg": 733.5, "RH_out": 92.0,
+  "Windspeed": 7.0, "Visibility": 63.0, "Tdewpoint": 5.3,
+  "recent_appliances_wh": [60.0, 50.0, 50.0, 60.0, 60.0, 50.0]
+}'
 ```
 
 Response:
 
 ```json
-{"target_timestamp": "2016-01-11T18:00:00", "predicted_appliances_wh": 50.0, "model_name": "energy-forecaster", "model_version": "5"}
+{"target_timestamp": "2026-10-27T21:30:00", "predicted_appliances_wh": 50.0, "model_name": "energy-forecaster", "model_version": "5"}
 ```
 
 To use real cURL from Windows PowerShell, call `curl.exe` explicitly and send the body from a file. Windows PowerShell 5.1 strips the inner double quotes from inline JSON arguments, and the API then returns `JSON decode error`. Quote `"@payload.json"`, because a bare `@` is PowerShell's splatting operator.
 
 ```powershell
-$body | Out-File -Encoding ascii payload.json
+$payload | Out-File -Encoding ascii payload.json
 curl.exe -s -X POST http://localhost:8000/predict -H "Content-Type: application/json" --data "@payload.json"
 ```
 
@@ -355,27 +372,27 @@ Out-of-range sensor values, non-finite numbers, unknown fields, missing fields a
 
 Grafana provisions the **Energy Forecaster - Serving & Drift** dashboard automatically: service health, `/predict` latency p50/p95/p99, 5xx ratio, prediction quantiles, hurdle active-stage ratio and per-column drift scores. Prometheus evaluates `prometheus/alerts.yml`: API down, 5xx ratio > 5%, `/predict` p95 > 250 ms, drift detected, and active-stage ratio > 50% for 30 minutes (training baseline ~22%).
 
-### Generate telemetry
+### Traffic warmup
 
-A fresh stack has served no predictions, so most panels show "No data". Right after `docker compose up`, send 15 predictions about one second apart:
+A fresh stack has served no predictions, so most panels show "No data". Right after `docker compose up`, run these two steps (**PowerShell or bash**, with the environment activated):
 
-**PowerShell**
-
-```powershell
-$body = '{"target_timestamp": "2016-01-11T18:00:00", "recent_appliances_wh": [60.0, 50.0, 50.0, 60.0, 60.0, 50.0], "lights": 30.0, "T1": 19.89, "RH_1": 47.596, "T2": 19.2, "RH_2": 44.79, "T3": 19.79, "RH_3": 44.4, "T6": 7.026, "RH_6": 84.256, "T_out": 6.6, "Press_mm_hg": 733.5, "RH_out": 92.0, "Windspeed": 7.0, "Visibility": 63.0, "Tdewpoint": 5.3}'
-1..15 | ForEach-Object { $r = Invoke-RestMethod -Uri "http://localhost:8000/predict" -Method Post -Body $body -ContentType "application/json"; Write-Host "request $_ -> $($r.predicted_appliances_wh) Wh"; Start-Sleep -Seconds 1 }
-```
-
-**bash**
+**Step 1: replay realistic data through the API.** This sends 250 real dataset rows to `/predict` and saves what it sent to `data/monitoring/simulated_traffic.csv`.
 
 ```bash
-PAYLOAD='{"target_timestamp": "2016-01-11T18:00:00", "recent_appliances_wh": [60.0, 50.0, 50.0, 60.0, 60.0, 50.0], "lights": 30.0, "T1": 19.89, "RH_1": 47.596, "T2": 19.2, "RH_2": 44.79, "T3": 19.79, "RH_3": 44.4, "T6": 7.026, "RH_6": 84.256, "T_out": 6.6, "Press_mm_hg": 733.5, "RH_out": 92.0, "Windspeed": 7.0, "Visibility": 63.0, "Tdewpoint": 5.3}'
-for i in $(seq 1 15); do echo "request $i -> $(curl -s -X POST http://localhost:8000/predict -H "Content-Type: application/json" -d "$PAYLOAD")"; sleep 1; done
+python scripts/simulate_traffic.py
 ```
+
+**Step 2: compute and publish Evidently drift metrics for that traffic.**
+
+```bash
+python -m src.monitoring.drift --current data/monitoring/simulated_traffic.csv
+```
+
+Step 2 needs `--current`. Without it, the drift command scores the held-out test split instead of the replayed traffic, and that report flags drift (20 of 21 features, see [Drift reports](#drift-reports-evidently)). The API reads the new `drift_metrics.json` on its next scrape, so the drift panels show the replay's result: no drift alerts for the default train-split replay.
 
 Then open the dashboard at http://localhost:3000/d/energy-forecaster?from=now-5m&to=now&refresh=5s. That link sets the time range to **Last 5 minutes** and auto-refresh to **5s**; you can also set both from the time picker and refresh menu at the top right. By default the dashboard shows the last 6 hours and refreshes every 30s, which makes a short burst of traffic hard to see. Prometheus scrapes every 15 seconds, so new requests appear within about 15-30 seconds.
 
-The loop sends the same payload every time. For varied, realistic traffic, use `scripts/simulate_traffic.py` (see [Replay realistic traffic](#replay-realistic-traffic)).
+Script options and what each split's replay shows are under [Replay realistic traffic](#replay-realistic-traffic).
 
 ### Drift reports (Evidently)
 
@@ -387,7 +404,7 @@ To use the held-out test split as a stand-in for production traffic (**PowerShel
 python -m src.monitoring.drift
 ```
 
-To score real traffic, copy the API's inference log out of the compose volume first. The log needs at least 200 served predictions; with fewer, the command prints `Drift check skipped: current has N rows` and exits with code 1. The telemetry loop's repeated payload counts toward this log and is flagged as drifted on every feature, so for a meaningful result on a fresh stack use the [replay script](#replay-realistic-traffic) instead.
+To score real traffic, copy the API's inference log out of the compose volume first. The log needs at least 200 served predictions; with fewer, the command prints `Drift check skipped: current has N rows` and exits with code 1. On a fresh stack, the [traffic warmup](#traffic-warmup) gives drift a realistic window without copying this log.
 
 **PowerShell**
 
