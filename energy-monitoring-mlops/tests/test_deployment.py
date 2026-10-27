@@ -114,7 +114,8 @@ class TestDockerfile:
     def test_no_pip_cache(self):
         instr = dockerfile_instructions()
         installs = [a for k, a in instr if k == "RUN" and "pip install" in a]
-        assert installs and all("--no-cache-dir" in a for a in installs)
+        # pip spells it --no-cache-dir, uv pip --no-cache
+        assert installs and all(re.search(r"--no-cache(-dir)?\b", a) for a in installs)
         assert any("requirements-serve.txt" in a for a in installs)
 
     def test_exposes_8000_and_healthchecks_health(self):

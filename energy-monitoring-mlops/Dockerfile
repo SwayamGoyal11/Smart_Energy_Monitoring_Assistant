@@ -18,11 +18,11 @@ ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 COPY requirements-serve.txt /tmp/requirements-serve.txt
-RUN pip install --no-cache-dir -r /tmp/requirements-serve.txt
+RUN uv venv /opt/venv && \
+    uv pip install --no-cache --python /opt/venv/bin/python -r /tmp/requirements-serve.txt
 
 # ---------- Stage 2: minimal runtime ----------
 FROM python:${PYTHON_VERSION}-slim AS runtime
