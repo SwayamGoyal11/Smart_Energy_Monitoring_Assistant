@@ -5,6 +5,7 @@ Integration tests for the FastAPI service. A throwaway SQLite registry is
 built per module, so the project's mlflow.db is never read or written.
 """
 
+import json
 import statistics
 import time
 
@@ -308,6 +309,34 @@ class TestModelLoading:
             assert body["champion_alias_verified"] is None
             assert c.post("/predict", json=VALID_PAYLOAD).status_code == 200
         assert not (tmp_path / "absent.db").exists(), "loader must not create an empty registry"
+
+    def test_exported_model_reports_registry_metadata(self, trained, tmp_path):
+        """scripts/export_champion.py output: served from disk, identified as the registry version."""
+        model, _, _ = trained
+        local = tmp_path / "champion"
+        mlflow.sklearn.save_model(model, str(local))
+        (local / "serving_metadata.json").write_text(json.dumps({
+            "model_name": MODEL_NAME, "model_version": "7", "run_id": "abc123",
+            "model_type": "linear_regression", "quality_gate": "passed",
+            "metrics": {"val_rmse": 60.2, "test_rmse": 60.9},
+        }))
+        missing_db = f"sqlite:///{(tmp_path / 'absent.db').as_posix()}"
+        with TestClient(create_app(Settings(tracking_uri=missing_db, local_model_path=str(local)))) as c:
+            health = c.get("/health").json()
+            assert health["model_source"] == "local" and health["model_version"] == "7"
+            info = c.get("/model-info").json()
+            assert info["model_type"] == "linear_regression" and info["quality_gate"] == "passed"
+            assert info["metrics"]["val_rmse"] == 60.2 and info["run_id"] == "abc123"
+            assert c.post("/predict", json=VALID_PAYLOAD).json()["model_version"] == "7"
+
+    def test_corrupt_serving_metadata_falls_back_to_local(self, trained, tmp_path):
+        model, _, _ = trained
+        local = tmp_path / "champion"
+        mlflow.sklearn.save_model(model, str(local))
+        (local / "serving_metadata.json").write_text("{broken")
+        missing_db = f"sqlite:///{(tmp_path / 'absent.db').as_posix()}"
+        with TestClient(create_app(Settings(tracking_uri=missing_db, local_model_path=str(local)))) as c:
+            assert c.get("/health").json()["model_version"] == "local"
 
     def test_no_model_returns_503(self, tmp_path):
         settings = Settings(

@@ -11,6 +11,7 @@ The registry is skipped when its SQLite file does not exist, so a container
 without mlflow.db never creates an empty one.
 """
 
+import json
 import logging
 import os
 from dataclasses import dataclass, field
@@ -27,6 +28,8 @@ from src.models.registry import CHAMPION_ALIAS, STAGING_ALIAS
 logger = logging.getLogger("energy_api")
 
 GATE_METRIC_PREFIXES = ("val_", "test_", "baseline_val_", "baseline_test_")
+# Written by scripts/export_champion.py next to an exported model.
+SERVING_METADATA_FILE = "serving_metadata.json"
 
 
 @dataclass
@@ -70,6 +73,18 @@ def _load_from_registry(client: MlflowClient, name: str, alias: str) -> LoadedMo
     )
 
 
+def _read_serving_metadata(local_path: str) -> dict:
+    path = os.path.join(local_path, SERVING_METADATA_FILE)
+    if not os.path.isfile(path):
+        return {}
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, ValueError) as exc:
+        logger.warning("Ignoring unreadable %s: %s", path, exc)
+        return {}
+
+
 def load_serving_model(tracking_uri: str, model_name: str, local_path: Optional[str]) -> Optional[LoadedModel]:
     """Return the first model that loads, or None if every source fails."""
     if registry_reachable(tracking_uri):
@@ -92,7 +107,18 @@ def load_serving_model(tracking_uri: str, model_name: str, local_path: Optional[
             logger.warning("Could not load local model at %s: %s", local_path, exc)
         else:
             logger.info("Loaded local model from %s", local_path)
-            return LoadedModel(model=model, name=model_name, version="local", source="local", uri=local_path)
+            meta = _read_serving_metadata(local_path)
+            return LoadedModel(
+                model=model,
+                name=meta.get("model_name", model_name),
+                version=str(meta.get("model_version", "local")),
+                source="local",
+                uri=local_path,
+                run_id=meta.get("run_id"),
+                model_type=meta.get("model_type"),
+                quality_gate=meta.get("quality_gate"),
+                metrics=meta.get("metrics", {}),
+            )
 
     logger.error("No serving model available (registry and local fallback both failed)")
     return None

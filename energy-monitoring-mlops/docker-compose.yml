@@ -1,0 +1,90 @@
+# ============================================================
+# Smart Energy Monitoring Assistant - local serving + monitoring stack
+#
+#   python scripts/export_champion.py     # once, and after each new champion
+#   docker compose up --build -d
+#
+#   API         http://localhost:8000/docs
+#   Prometheus  http://localhost:9090
+#   Grafana     http://localhost:3000   (admin / $GRAFANA_ADMIN_PASSWORD)
+# ============================================================
+
+name: energy-monitoring
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: energy-forecaster-api:latest
+    container_name: energy-api
+    ports:
+      - "8000:8000"
+    environment:
+      MODEL_LOCAL_PATH: /app/models/champion
+      DRIFT_METRICS_PATH: /app/reports/evidence/drift_metrics.json
+      INFERENCE_LOG_PATH: /app/data/monitoring/inference_log.csv
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+    volumes:
+      # Exported champion (scripts/export_champion.py); swap without rebuilding.
+      - ./models/champion:/app/models/champion:ro
+      # drift_metrics.json from `python -m src.monitoring.drift`, exported as gauges.
+      - ./reports/evidence:/app/reports/evidence:ro
+      # Served inputs + predictions: the "current" window for drift reports.
+      - inference-logs:/app/data/monitoring
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: energy-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: energy-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+volumes:
+  prometheus-data:
+  grafana-data:
+  inference-logs:
+
+networks:
+  monitoring:
+    driver: bridge

@@ -1,0 +1,25 @@
+# ============================================================
+# Smart Energy Monitoring Assistant - requirements-serve.txt
+# Runtime dependencies of the inference API only (Docker image).
+# requirements.txt includes this file and adds training, drift
+# reporting, orchestration, notebooks and testing on top.
+# ============================================================
+
+# Core data science
+# pandas < 3: evidently 0.7.x (requirements.txt) imports internals removed in pandas 3.0
+pandas>=2.3.0,<3.0.0
+numpy>=2.0.0,<3.0.0
+scikit-learn>=1.8.0,<2.0.0
+xgboost>=3.4.0,<4.0.0
+joblib>=1.5.0
+
+# Data contracts and inference service
+pydantic>=2.12.0,<3.0.0
+fastapi>=0.135.0,<1.0.0
+uvicorn>=0.43.0,<1.0.0
+prometheus-client>=0.24.0,<1.0.0
+
+# Model loading: the MLflow client without the tracking server, UI or
+# SQL store; skops deserializes the sklearn-flavor models
+mlflow-skinny>=3.17.0,<4.0.0
+skops>=0.16.0,<1.0.0

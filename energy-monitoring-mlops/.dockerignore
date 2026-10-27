@@ -1,0 +1,12 @@
+# Allow-list build context: ignore everything, then admit only what the
+# image needs. Keeps venv/, .venv/, .git/, .zen/, .dvc/, tests/, notebooks/,
+# data/, models/, mlruns/, mlflow.db, reports/ and caches out of the context.
+*
+
+!requirements-serve.txt
+!src/
+
+# Never ship bytecode or editor/OS clutter even from inside src/
+**/__pycache__
+**/*.py[cod]
+**/.DS_Store

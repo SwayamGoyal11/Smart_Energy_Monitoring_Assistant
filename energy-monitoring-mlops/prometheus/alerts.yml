@@ -1,0 +1,51 @@
+# Alerting rules for the energy forecasting API.
+# Thresholds mirror the service's own contracts: the p95 latency budget from
+# tests/test_api.py and the drift alert from src/monitoring/drift.py.
+groups:
+  - name: energy-api
+    rules:
+      - alert: EnergyApiDown
+        expr: up{job="energy-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Energy forecasting API is not responding to scrapes.
+
+      - alert: EnergyApiHighErrorRate
+        expr: |
+          sum(rate(http_requests_total{job="energy-api", status=~"5.."}[5m]))
+            / clamp_min(sum(rate(http_requests_total{job="energy-api"}[5m])), 1e-9) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 5% of API requests are failing with 5xx.
+
+      - alert: EnergyApiSlowPredictions
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(http_request_duration_seconds_bucket{job="energy-api", path="/predict"}[5m]))
+          ) > 0.25
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: p95 /predict latency is above 250 ms.
+
+      - alert: EnergyModelDriftDetected
+        expr: model_drift_detected{job="energy-api"} == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Latest Evidently report flags data, prediction or target drift.
+          description: Review reports/evidence/drift_report.html and consider retraining.
+
+      - alert: EnergyModelActiveRatioAnomalous
+        expr: model_active_stage_ratio{job="energy-api"} > 0.5
+        for: 30m
+        labels:
+          severity: info
+        annotations:
+          summary: Over half of predictions route to the burst regressor (training rate is about 22%).

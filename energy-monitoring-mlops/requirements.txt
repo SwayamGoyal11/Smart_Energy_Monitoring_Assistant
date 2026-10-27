@@ -7,32 +7,21 @@
 # upper bounds cap the next major release.
 # ============================================================
 
-# Core data science
-# pandas < 3: evidently 0.7.x imports pandas internals removed in pandas 3.0
-pandas>=2.3.0,<3.0.0
-numpy>=2.0.0,<3.0.0
+# Inference API runtime (pandas, numpy, scikit-learn, xgboost, joblib,
+# pydantic, fastapi, uvicorn, prometheus-client, mlflow-skinny, skops)
+-r requirements-serve.txt
+
+# Scientific stack
 scipy>=1.17.0,<2.0.0
 
 # Visualization
 matplotlib>=3.10.0,<4.0.0
 seaborn>=0.13.0,<1.0.0
 
-# Machine learning
-scikit-learn>=1.8.0,<2.0.0
-xgboost>=3.4.0,<4.0.0
-
-# Data contracts / inference schemas
-pydantic>=2.12.0,<3.0.0
-
-# Inference service
-fastapi>=0.135.0,<1.0.0
-uvicorn>=0.43.0,<1.0.0
-
-# Monitoring: drift reports and Prometheus telemetry
+# Drift reporting
 evidently>=0.7.23,<0.8.0
-prometheus-client>=0.24.0,<1.0.0
 
-# MLflow experiment tracking and model registry
+# MLflow tracking server, UI and model registry (full package)
 mlflow>=3.17.0,<4.0.0
 
 # ZenML orchestration and MLflow experiment-tracker integration
@@ -55,4 +44,3 @@ httpx>=0.28.0,<1.0.0
 
 # Utilities
 python-dotenv>=1.2.0
-joblib>=1.5.0

@@ -27,6 +27,8 @@ mlflow.db
 # Models
 models/*.pkl
 models/*.joblib
+# Exported serving model (scripts/export_champion.py), mounted into Docker
+/models/champion/
 
 # OS
 .DS_Store
