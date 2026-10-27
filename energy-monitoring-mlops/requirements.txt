@@ -19,6 +19,9 @@ xgboost>=3.4.0,<4.0.0
 # MLflow experiment tracking
 mlflow>=3.17.0,<4.0.0
 
+# ZenML orchestration and MLflow experiment-tracker integration
+zenml[server,mlflow]>=0.80.0,<1.0.0
+
 # DVC dataset versioning
 dvc>=3.30.0,<4.0.0
 

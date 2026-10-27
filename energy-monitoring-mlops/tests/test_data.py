@@ -110,6 +110,14 @@ class TestFeatureEngineering:
     def test_is_weekend_binary(self, feature_df):
         assert feature_df["is_weekend"].isin([0, 1]).all()
 
+    def test_cyclical_time_features_are_bounded(self, feature_df):
+        cyclical_columns = [
+            "hour_sin", "hour_cos", "day_of_week_sin", "day_of_week_cos",
+            "month_sin", "month_cos",
+        ]
+        for column in cyclical_columns:
+            assert feature_df[column].between(-1.0, 1.0).all()
+
     def test_lag1_matches_previous_row(self, feature_df):
         for i in range(1, 10):
             expected = feature_df["Appliances"].iloc[i - 1]

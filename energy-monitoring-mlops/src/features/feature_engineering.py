@@ -27,7 +27,11 @@ ENVIRONMENTAL_FEATURES = [
     "lights",        # Lighting energy at current timestep
 ]
 
-TIME_FEATURES    = ["hour", "day", "day_of_week", "month", "is_weekend"]
+TIME_FEATURES    = [
+    "hour", "day", "day_of_week", "month", "is_weekend",
+    "hour_sin", "hour_cos", "day_of_week_sin", "day_of_week_cos",
+    "month_sin", "month_cos",
+]
 LAG_FEATURES     = ["Appliances_lag_1", "Appliances_lag_2", "Appliances_lag_3"]
 ROLLING_FEATURES = [
     "Appliances_rolling_mean_3",
@@ -47,6 +51,8 @@ def create_time_features(df: pd.DataFrame) -> pd.DataFrame:
     - day_of_week : 0=Mon..6=Sun
     - month       : 1-12, seasonal variation
     - is_weekend  : 1 if Sat/Sun, else 0
+    - cyclic terms: sine/cosine representations for hour, weekday and month,
+      so values at the ends of a natural cycle remain close in feature space.
     """
     df = df.copy()
     df["hour"]        = df["date"].dt.hour
@@ -54,6 +60,13 @@ def create_time_features(df: pd.DataFrame) -> pd.DataFrame:
     df["day_of_week"] = df["date"].dt.dayofweek
     df["month"]       = df["date"].dt.month
     df["is_weekend"]  = (df["day_of_week"] >= 5).astype(int)
+    df["hour_sin"] = np.sin(2 * np.pi * df["hour"] / 24)
+    df["hour_cos"] = np.cos(2 * np.pi * df["hour"] / 24)
+    df["day_of_week_sin"] = np.sin(2 * np.pi * df["day_of_week"] / 7)
+    df["day_of_week_cos"] = np.cos(2 * np.pi * df["day_of_week"] / 7)
+    # Months are 1-indexed; shifting to zero-based preserves the 12-month cycle.
+    df["month_sin"] = np.sin(2 * np.pi * (df["month"] - 1) / 12)
+    df["month_cos"] = np.cos(2 * np.pi * (df["month"] - 1) / 12)
     return df
 
 
