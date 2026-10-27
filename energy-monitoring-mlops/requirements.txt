@@ -1,6 +1,6 @@
 # ============================================================
 # Smart Energy Monitoring Assistant - requirements.txt
-# Phase 1-2: EDA, Features, ML, MLflow, ZenML, DVC, Serving, Testing
+# Phase 1-2: EDA, Features, ML, MLflow, ZenML, DVC, Serving, Monitoring, Testing
 #
 # Reference environment: Python 3.12 (project venv/).
 # Lower bounds are the versions verified in that environment;
@@ -8,7 +8,8 @@
 # ============================================================
 
 # Core data science
-pandas>=2.3.0,<4.0.0
+# pandas < 3: evidently 0.7.x imports pandas internals removed in pandas 3.0
+pandas>=2.3.0,<3.0.0
 numpy>=2.0.0,<3.0.0
 scipy>=1.17.0,<2.0.0
 
@@ -26,6 +27,10 @@ pydantic>=2.12.0,<3.0.0
 # Inference service
 fastapi>=0.135.0,<1.0.0
 uvicorn>=0.43.0,<1.0.0
+
+# Monitoring: drift reports and Prometheus telemetry
+evidently>=0.7.23,<0.8.0
+prometheus-client>=0.24.0,<1.0.0
 
 # MLflow experiment tracking and model registry
 mlflow>=3.17.0,<4.0.0

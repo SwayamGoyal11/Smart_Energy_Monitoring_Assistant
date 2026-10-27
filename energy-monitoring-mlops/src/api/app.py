@@ -12,6 +12,10 @@ Configuration (environment variables):
     MODEL_LOCAL_PATH     MLflow model directory used if the registry is unavailable
                          (default: models/champion)
     CORS_ORIGINS         comma-separated allowed origins (default: *)
+    DRIFT_METRICS_PATH   drift_metrics.json exported as model_drift_* gauges
+                         (default: reports/evidence/drift_metrics.json)
+    INFERENCE_LOG_PATH   CSV to append served features + predictions to, for
+                         drift monitoring (default: unset, logging disabled)
 """
 
 import logging
@@ -24,7 +28,8 @@ from typing import List, Optional
 import numpy as np
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from src.api.model_loader import LoadedModel, champion_matches, load_serving_model
 from src.api.schemas import (
@@ -35,7 +40,9 @@ from src.features.feature_engineering import ALL_FEATURE_COLS
 from src.serving.schemas import build_feature_frame
 from src.models.quality_gates import QualityThresholds
 from src.models.registry import REGISTERED_MODEL, tracking_uri
-from src.models.train import PROJECT_ROOT
+from src.models.train import PROJECT_ROOT, REPORTS_DIR
+from src.monitoring.inference_log import InferenceLogger
+from src.monitoring.metrics import ApiMetrics
 from src.validation.input_validation import InputValidationError, validate_feature_frame
 
 logger = logging.getLogger("energy_api")
@@ -53,6 +60,12 @@ class Settings:
     cors_origins: List[str] = field(
         default_factory=lambda: [o.strip() for o in os.environ.get("CORS_ORIGINS", "*").split(",") if o.strip()]
     )
+    drift_metrics_path: Optional[str] = field(
+        default_factory=lambda: os.environ.get(
+            "DRIFT_METRICS_PATH", os.path.join(REPORTS_DIR, "drift_metrics.json"),
+        )
+    )
+    inference_log_path: Optional[str] = field(default_factory=lambda: os.environ.get("INFERENCE_LOG_PATH"))
 
 
 def _require_model(request: Request) -> LoadedModel:
@@ -62,7 +75,20 @@ def _require_model(request: Request) -> LoadedModel:
     return loaded
 
 
-def _predict(loaded: LoadedModel, requests: List[PredictionRequest]) -> List[PredictionResponse]:
+def _stage_model(loaded: Optional[LoadedModel]):
+    """The underlying HurdleModel, if that is what is being served."""
+    if loaded is None:
+        return None
+    try:
+        raw = loaded.model.get_raw_model()
+    except Exception:
+        return None
+    return raw if hasattr(raw, "predict_active_proba") else None
+
+
+def _predict(request: Request, requests: List[PredictionRequest]) -> List[PredictionResponse]:
+    loaded = _require_model(request)
+    state = request.app.state
     frame = build_feature_frame(requests)
     try:
         X = validate_feature_frame(frame)
@@ -80,6 +106,18 @@ def _predict(loaded: LoadedModel, requests: List[PredictionRequest]) -> List[Pre
 
     # Energy cannot be negative; the hurdle model already clips, other flavors may not.
     preds = np.clip(preds, 0.0, None)
+
+    state.metrics.observe_predictions(preds, loaded.version)
+    if state.stage_model is not None:
+        stage = state.stage_model
+        n_active = int((stage.predict_active_proba(X) >= stage.decision_threshold).sum())
+        state.metrics.observe_stages(n_active, len(preds) - n_active)
+    if state.inference_logger is not None:
+        try:
+            state.inference_logger.log(X, preds, [r.target_timestamp for r in requests], loaded.version)
+        except OSError:
+            logger.exception("Could not write inference log")
+
     return [
         PredictionResponse(
             target_timestamp=r.target_timestamp,
@@ -100,9 +138,11 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         app.state.loaded = load_serving_model(
             settings.tracking_uri, settings.model_name, settings.local_model_path,
         )
+        app.state.stage_model = _stage_model(app.state.loaded)
         yield
         logger.info("Shutting down; releasing model")
         app.state.loaded = None
+        app.state.stage_model = None
 
     app = FastAPI(
         title="Smart Energy Monitoring API",
@@ -112,7 +152,12 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.loaded = None
+    app.state.stage_model = None
     app.state.started_at = time.monotonic()
+    app.state.metrics = ApiMetrics(settings.drift_metrics_path)
+    app.state.inference_logger = (
+        InferenceLogger(settings.inference_log_path) if settings.inference_log_path else None
+    )
 
     app.add_middleware(
         CORSMiddleware,
@@ -122,10 +167,15 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     )
 
     @app.middleware("http")
-    async def add_process_time(request: Request, call_next):
+    async def instrument(request: Request, call_next):
         start = time.perf_counter()
         response = await call_next(request)
-        response.headers["X-Process-Time-Ms"] = f"{(time.perf_counter() - start) * 1000:.2f}"
+        elapsed = time.perf_counter() - start
+        # Label by route template, not raw URL, to keep label cardinality bounded.
+        route = request.scope.get("route")
+        path = getattr(route, "path", "unmatched")
+        request.app.state.metrics.observe_request(request.method, path, response.status_code, elapsed)
+        response.headers["X-Process-Time-Ms"] = f"{elapsed * 1000:.2f}"
         return response
 
     @app.get("/health", response_model=HealthResponse)
@@ -144,11 +194,11 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     @app.post("/predict", response_model=PredictionResponse)
     def predict(payload: PredictionRequest, request: Request):
-        return _predict(_require_model(request), [payload])[0]
+        return _predict(request, [payload])[0]
 
     @app.post("/predict/batch", response_model=BatchPredictionResponse)
     def predict_batch(payload: BatchPredictionRequest, request: Request):
-        return BatchPredictionResponse(predictions=_predict(_require_model(request), payload.instances))
+        return BatchPredictionResponse(predictions=_predict(request, payload.instances))
 
     @app.get("/model-info", response_model=ModelInfoResponse)
     def model_info(request: Request):
@@ -167,6 +217,12 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             input_features=ALL_FEATURE_COLS,
             request_schema=PredictionRequest.model_json_schema(),
         )
+
+    @app.get("/metrics", include_in_schema=False)
+    def metrics(request: Request):
+        api_metrics = request.app.state.metrics
+        api_metrics.refresh_drift()
+        return Response(generate_latest(api_metrics.registry), media_type=CONTENT_TYPE_LATEST)
 
     return app
 
