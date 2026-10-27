@@ -1,6 +1,6 @@
 # ============================================================
 # Smart Energy Monitoring Assistant - requirements.txt
-# Phase 1-2: EDA, Features, ML, MLflow, ZenML, DVC, Testing
+# Phase 1-2: EDA, Features, ML, MLflow, ZenML, DVC, Serving, Testing
 #
 # Reference environment: Python 3.12 (project venv/).
 # Lower bounds are the versions verified in that environment;
@@ -23,6 +23,10 @@ xgboost>=3.4.0,<4.0.0
 # Data contracts / inference schemas
 pydantic>=2.12.0,<3.0.0
 
+# Inference service
+fastapi>=0.135.0,<1.0.0
+uvicorn>=0.43.0,<1.0.0
+
 # MLflow experiment tracking and model registry
 mlflow>=3.17.0,<4.0.0
 
@@ -41,6 +45,8 @@ nbconvert>=7.17.0
 # Testing
 pytest>=8.4.0,<10.0.0
 pytest-cov>=5.0.0,<8.0.0
+# FastAPI TestClient transport
+httpx>=0.28.0,<1.0.0
 
 # Utilities
 python-dotenv>=1.2.0

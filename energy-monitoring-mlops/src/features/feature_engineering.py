@@ -57,7 +57,7 @@ def create_time_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df["hour"]        = df["date"].dt.hour
     df["day"]         = df["date"].dt.day
-    df["day_of_week"] = df["date"].dt.dayofweek
+    df["day_of_week"] = df["date"].dt.day_of_week
     df["month"]       = df["date"].dt.month
     df["is_weekend"]  = (df["day_of_week"] >= 5).astype(int)
     df["hour_sin"] = np.sin(2 * np.pi * df["hour"] / 24)

@@ -16,7 +16,9 @@ from src.data.load_data import load_raw_data
 from src.features.feature_engineering import (
     ALL_FEATURE_COLS, ENVIRONMENTAL_FEATURES, build_feature_matrix,
 )
-from src.serving.schemas import HISTORY_LENGTH, PredictionRequest, PredictionResponse
+from src.serving.schemas import (
+    HISTORY_LENGTH, PredictionRequest, PredictionResponse, build_feature_frame,
+)
 from src.validation.input_validation import validate_feature_frame
 
 VALID_PAYLOAD = {
@@ -99,6 +101,21 @@ class TestFeatureFrame:
         a = PredictionRequest(**VALID_PAYLOAD).to_feature_frame()
         b = PredictionRequest(**payload(recent_appliances_wh=long_history)).to_feature_frame()
         pd.testing.assert_frame_equal(a, b)
+
+    def test_batch_frame_matches_individual_frames(self):
+        """Stacked blocks must not leak lag/rolling values across requests."""
+        requests = [
+            PredictionRequest(**VALID_PAYLOAD),
+            PredictionRequest(**payload(
+                target_timestamp="2016-03-19T23:50:00", T_out=-2.0,
+                recent_appliances_wh=[900.0, 10.0, 700.0, 20.0, 500.0, 30.0],
+            )),
+            PredictionRequest(**payload(recent_appliances_wh=[999.0] * 10 + [40.0] * 6)),
+        ]
+        batch = build_feature_frame(requests)
+        individual = pd.concat([r.to_feature_frame() for r in requests], ignore_index=True)
+        pd.testing.assert_frame_equal(batch, individual)
+        assert batch.loc[2, "Appliances_rolling_mean_6"] == 40.0
 
     def test_time_features_from_target_timestamp(self):
         X = PredictionRequest(**payload(target_timestamp="2016-03-19T23:50:00")).to_feature_frame().iloc[0]

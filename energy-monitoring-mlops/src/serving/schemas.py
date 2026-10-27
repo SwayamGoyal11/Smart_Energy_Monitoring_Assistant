@@ -75,19 +75,32 @@ class PredictionRequest(BaseModel):
 
     def to_feature_frame(self) -> pd.DataFrame:
         """Build the single-row model input in ALL_FEATURE_COLS order."""
-        history = self.recent_appliances_wh[-HISTORY_LENGTH:]
-        dates = [self.target_timestamp - INTERVAL * k for k in range(HISTORY_LENGTH, 0, -1)]
-        frame = pd.DataFrame({
-            "date": pd.to_datetime(dates + [self.target_timestamp]),
-            TARGET_COL: history + [np.nan],
-        })
-        for col in ENVIRONMENTAL_FEATURES:
-            frame[col] = getattr(self, col)
+        return build_feature_frame([self])
 
-        frame = create_time_features(frame)
-        frame = create_lag_features(frame)
-        frame = create_rolling_features(frame)
-        return frame[ALL_FEATURE_COLS].iloc[[-1]].reset_index(drop=True)
+
+def build_feature_frame(requests: List[PredictionRequest]) -> pd.DataFrame:
+    """
+    Build model inputs for many requests in one pass of the training feature code.
+
+    Each request becomes a block of HISTORY_LENGTH history rows plus its target
+    row. Blocks are stacked; since the longest look-back (rolling window over
+    shift(1)) spans exactly HISTORY_LENGTH rows, no feature reads across blocks.
+    """
+    block = HISTORY_LENGTH + 1
+    offsets = np.array([INTERVAL * k for k in range(HISTORY_LENGTH, -1, -1)])
+    dates, energy = [], []
+    for r in requests:
+        dates.extend(r.target_timestamp - offsets)
+        energy.extend(r.recent_appliances_wh[-HISTORY_LENGTH:] + [np.nan])
+
+    frame = pd.DataFrame({"date": pd.to_datetime(dates), TARGET_COL: energy})
+    for col in ENVIRONMENTAL_FEATURES:
+        frame[col] = np.repeat([getattr(r, col) for r in requests], block)
+
+    frame = create_time_features(frame)
+    frame = create_lag_features(frame)
+    frame = create_rolling_features(frame)
+    return frame[ALL_FEATURE_COLS].iloc[block - 1::block].reset_index(drop=True)
 
 
 class PredictionResponse(BaseModel):
@@ -99,3 +112,18 @@ class PredictionResponse(BaseModel):
     predicted_appliances_wh: float = Field(..., ge=0.0, allow_inf_nan=False)
     model_name: str = Field(..., min_length=1)
     model_version: str = Field(..., min_length=1)
+
+
+MAX_BATCH_SIZE = 1000
+
+
+class BatchPredictionRequest(BaseModel):
+    """Several independent forecast requests scored in one model call."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    instances: List[PredictionRequest] = Field(..., min_length=1, max_length=MAX_BATCH_SIZE)
+
+
+class BatchPredictionResponse(BaseModel):
+    predictions: List[PredictionResponse]
