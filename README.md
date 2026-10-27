@@ -375,6 +375,8 @@ for i in $(seq 1 15); do echo "request $i -> $(curl -s -X POST http://localhost:
 
 Then open the dashboard at http://localhost:3000/d/energy-forecaster?from=now-5m&to=now&refresh=5s. That link sets the time range to **Last 5 minutes** and auto-refresh to **5s**; you can also set both from the time picker and refresh menu at the top right. By default the dashboard shows the last 6 hours and refreshes every 30s, which makes a short burst of traffic hard to see. Prometheus scrapes every 15 seconds, so new requests appear within about 15-30 seconds.
 
+The loop sends the same payload every time. For varied, realistic traffic, use `scripts/simulate_traffic.py` (see [Replay realistic traffic](#replay-realistic-traffic)).
+
 ### Drift reports (Evidently)
 
 Drift compares a current window of model inputs and predictions against the training split. Calendar features are excluded, since production data always comes from a later date than training. Generate `data/processed/features.csv` first with `python run_pipeline.py`.
@@ -385,7 +387,7 @@ To use the held-out test split as a stand-in for production traffic (**PowerShel
 python -m src.monitoring.drift
 ```
 
-To score real traffic, copy the API's inference log out of the compose volume first. The log needs at least 200 served predictions; with fewer, the command prints `Drift check skipped: current has N rows` and exits with code 1. To try it on a fresh stack, rerun the telemetry loop above with `1..200` (PowerShell) or `seq 1 200` (bash) and drop the sleep. Repeating a single sample payload is deliberately unrealistic traffic, so expect every feature to be flagged as drifted. The running API picks up the new `drift_metrics.json`, so `model_drift_detected` reads 1 and the `EnergyModelDriftDetected` alert fires after 5 minutes. Run `python -m src.monitoring.drift` again to go back to the test-split report. That report also flags drift (20 of 21 features), because the test window comes later in the season than the training data.
+To score real traffic, copy the API's inference log out of the compose volume first. The log needs at least 200 served predictions; with fewer, the command prints `Drift check skipped: current has N rows` and exits with code 1. The telemetry loop's repeated payload counts toward this log and is flagged as drifted on every feature, so for a meaningful result on a fresh stack use the [replay script](#replay-realistic-traffic) instead.
 
 **PowerShell**
 
@@ -408,7 +410,32 @@ Options: `--method wasserstein|ks`, `--threshold <float>`, and `--fail-on-drift`
 Outputs:
 
 - `reports/evidence/drift_report.html`: the interactive Evidently report; open it in a browser.
-- `reports/evidence/drift_metrics.json`: structured scores. The API re-reads this file on the next scrape after it changes, so the `model_drift_*` gauges and Grafana panels update without a restart.
+- `reports/evidence/drift_metrics.json`: structured scores. The API re-reads this file on the next scrape after it changes, so the `model_drift_*` gauges and Grafana panels update without a restart. Whichever report you generate last is what Grafana and the `EnergyModelDriftDetected` alert reflect.
+
+The default test-split report flags drift (20 of 21 features), because the test window comes later in the season than the training data.
+
+### Replay realistic traffic
+
+`scripts/simulate_traffic.py` posts real dataset rows to `/predict`. Each request carries the row's own timestamp and sensor readings plus the six actual readings before it, exactly as a client would send them. It writes what it sent to `data/monitoring/simulated_traffic.csv` in the inference-log format, so drift scores just this replay, not everything the API has served.
+
+**PowerShell or bash** (with the stack running):
+
+```bash
+python scripts/simulate_traffic.py
+python -m src.monitoring.drift --current data/monitoring/simulated_traffic.csv
+```
+
+Defaults are 250 rows (drift needs at least 200) sampled from the train split. Options: `--split train|val|test`, `--rows <n>`, `--seed <n>`, `--delay <seconds>` and `--url <base url>`. The script also prints the MAE against the actual readings.
+
+Which split you replay decides what the dashboard shows, because drift is measured against the training split. Results with the default 250 rows and `--seed 42` (exact counts shift a little with the seed):
+
+| `--split` | Features drifted | Alerts | Dashboard drift status |
+|---|---|---|---|
+| `train` | 1/21 | none | OK |
+| `val` | 21/21 | dataset, prediction, target | drift detected |
+| `test` | 20/21 | dataset, prediction | drift detected |
+
+Replaying the train split shows the monitoring path working when traffic matches the training data; it says nothing about how the model does on newer data. The `val` and `test` results are the real seasonal shift the model card describes.
 
 ---
 
@@ -431,6 +458,7 @@ energy-monitoring-mlops/
 │   └── monitoring/                   # Prometheus metrics, inference log, Evidently drift
 ├── tests/                            # 243 PyTest tests
 ├── scripts/export_champion.py        # registry alias -> models/champion/
+├── scripts/simulate_traffic.py       # replay dataset rows through /predict for dashboards and drift
 ├── run_pipeline.py                   # Phase 1 benchmark pipeline
 ├── run_registry.py                   # train, gate, register
 ├── Dockerfile, docker-compose.yml    # serving image and monitoring stack
