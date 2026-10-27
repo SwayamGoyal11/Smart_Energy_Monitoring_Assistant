@@ -1,18 +1,15 @@
 name: CD
 
 # Publishes the inference API image to GHCR:
-#   - after CI succeeds on main  -> :latest and :sha-<short>
-#   - on a v*.*.* release tag     -> :<major>.<minor>.<patch>, :<major>.<minor> and :sha-<short>
+#   - after CI succeeds on main      -> :latest and :sha-<short>
+#   - after CI succeeds on a release -> :<major>.<minor>.<patch>, :<major>.<minor> and :sha-<short>
 on:
   workflow_run:
     workflows: [CI]
     types: [completed]
-    branches: [main]
-  push:
-    tags: ["v*.*.*"]
 
 concurrency:
-  group: cd-${{ github.event_name }}-${{ github.ref }}
+  group: cd-${{ github.event.workflow_run.head_sha }}
   cancel-in-progress: false
 
 permissions:
@@ -31,18 +28,29 @@ jobs:
   publish:
     name: Build & push image
     runs-on: ubuntu-latest
-    # workflow_run fires on every CI completion; only ship green main builds.
-    if: github.event_name == 'push' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    # Only ship if CI succeeded on a push to main or a release tag. The event
+    # check matters: workflow_run also fires for pull_request CI runs, whose
+    # head_branch is the PR's source branch (a fork can name it 'main').
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      (
+        github.event.workflow_run.head_branch == 'main' ||
+        startsWith(github.event.workflow_run.head_branch, 'v')
+      )
     steps:
-      # On workflow_run, github.sha is the current tip of main, not the commit
-      # CI tested, so check out and tag the tested commit explicitly.
-      - name: Resolve commit
+      - name: Resolve commit and tag info
         id: commit
         working-directory: .
+        # Passed via env, not interpolated into the script, so a ref name
+        # can never be executed as shell.
+        env:
+          sha: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.workflow_run.head_branch }}
         run: |
-          sha="${{ github.event.workflow_run.head_sha || github.sha }}"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "short=${sha::7}" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v4
         with:
@@ -62,11 +70,13 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE_NAME }}
+          # :latest comes only from the explicit main rule, never auto-added on releases
+          flavor: latest=false
           tags: |
-            type=raw,value=latest,enable=${{ github.event_name == 'workflow_run' }}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ steps.commit.outputs.ref == 'main' }}
             type=raw,value=sha-${{ steps.commit.outputs.short }}
+            type=semver,pattern={{version}},value=${{ steps.commit.outputs.ref }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.commit.outputs.ref }}
           labels: |
             org.opencontainers.image.revision=${{ steps.commit.outputs.sha }}
 
