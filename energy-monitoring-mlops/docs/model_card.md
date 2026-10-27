@@ -85,7 +85,9 @@ Every candidate is registered as a version of `energy-forecaster`, tagged with `
 - `staging`: latest candidate that passed the gates.
 - `champion`: the gated candidate with the lowest validation RMSE (the serving model). Test data is a pass/fail check only, never used to pick between models.
 
-Current champion: Two-Stage Hurdle.
+Current champion: Two-Stage Hurdle, `energy-forecaster` version 1 (served from `models/champion/` via `scripts/export_champion.py`).
+
+The same gates run in CI on every push and pull request (`.github/workflows/ci.yml`, quality-gate job), so a change that degrades the candidates below threshold fails the build.
 
 ---
 

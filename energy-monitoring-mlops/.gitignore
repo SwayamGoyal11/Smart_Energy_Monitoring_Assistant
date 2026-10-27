@@ -40,3 +40,6 @@ Thumbs.db
 *.log
 
 .zen/
+
+# Inference logs copied out of the API container for drift checks
+/data/monitoring/
