@@ -5,6 +5,9 @@ Phase 1 main entry point. Run from the project root:
 
     cd energy-monitoring-mlops
     python run_pipeline.py
+
+To launch the MLflow UI and view runs:
+    mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5000
 """
 
 import os
@@ -87,7 +90,8 @@ def main():
 
     print("\n" + "=" * 60)
     print("  PIPELINE COMPLETE")
-    print("  Run: mlflow ui   (then open http://localhost:5000)")
+    print("  Run: mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5000")
+    print("  Then open: http://127.0.0.1:5000")
     print("=" * 60 + "\n")
 
 
