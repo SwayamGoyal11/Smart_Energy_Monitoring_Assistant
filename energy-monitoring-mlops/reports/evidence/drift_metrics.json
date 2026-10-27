@@ -1,0 +1,122 @@
+{
+  "generated_at": "2026-10-27T16:14:20.944914+00:00",
+  "config": {
+    "method": "wasserstein",
+    "threshold": 0.1,
+    "drift_share": 0.3,
+    "score_type": "distance"
+  },
+  "reference": {
+    "rows": 13810
+  },
+  "current": {
+    "rows": 250,
+    "source": "data/monitoring/simulated_traffic.csv"
+  },
+  "dataset_drift": {
+    "detected": false,
+    "drifted_columns": [
+      "RH_out"
+    ],
+    "drifted_count": 1,
+    "monitored_count": 21,
+    "share": 0.0476
+  },
+  "features": {
+    "Appliances_lag_1": {
+      "score": 0.067032,
+      "drifted": false
+    },
+    "Appliances_lag_2": {
+      "score": 0.06912,
+      "drifted": false
+    },
+    "Appliances_lag_3": {
+      "score": 0.056441,
+      "drifted": false
+    },
+    "Appliances_rolling_mean_3": {
+      "score": 0.066773,
+      "drifted": false
+    },
+    "Appliances_rolling_mean_6": {
+      "score": 0.054891,
+      "drifted": false
+    },
+    "Appliances_rolling_std_6": {
+      "score": 0.054389,
+      "drifted": false
+    },
+    "T1": {
+      "score": 0.073975,
+      "drifted": false
+    },
+    "RH_1": {
+      "score": 0.058487,
+      "drifted": false
+    },
+    "T2": {
+      "score": 0.062171,
+      "drifted": false
+    },
+    "RH_2": {
+      "score": 0.057283,
+      "drifted": false
+    },
+    "T3": {
+      "score": 0.052817,
+      "drifted": false
+    },
+    "RH_3": {
+      "score": 0.037687,
+      "drifted": false
+    },
+    "T6": {
+      "score": 0.070069,
+      "drifted": false
+    },
+    "RH_6": {
+      "score": 0.056608,
+      "drifted": false
+    },
+    "T_out": {
+      "score": 0.084204,
+      "drifted": false
+    },
+    "Press_mm_hg": {
+      "score": 0.060035,
+      "drifted": false
+    },
+    "RH_out": {
+      "score": 0.101476,
+      "drifted": true
+    },
+    "Windspeed": {
+      "score": 0.080959,
+      "drifted": false
+    },
+    "Visibility": {
+      "score": 0.039821,
+      "drifted": false
+    },
+    "Tdewpoint": {
+      "score": 0.09006,
+      "drifted": false
+    },
+    "lights": {
+      "score": 0.095187,
+      "drifted": false
+    }
+  },
+  "prediction": {
+    "column": "prediction",
+    "score": 0.05488,
+    "drifted": false
+  },
+  "alerts": [],
+  "model": {
+    "name": "energy-forecaster",
+    "version": "5",
+    "source": "registry:champion"
+  }
+}
