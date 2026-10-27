@@ -43,7 +43,7 @@ def dockerfile_instructions():
             continue
         lines.append(buf + line)
         buf = ""
-    return [(l.split(None, 1)[0].upper(), l.split(None, 1)[1] if " " in l else "") for l in lines]
+    return [(ln.split(None, 1)[0].upper(), ln.split(None, 1)[1] if " " in ln else "") for ln in lines]
 
 
 def final_stage(instr):
@@ -159,8 +159,8 @@ class TestServeRequirements:
         assert "-r requirements-serve.txt" in read("requirements.txt").splitlines()
 
     def test_serve_requirements_are_minimal(self):
-        names = {re.split(r"[<>=\[]", l)[0].strip().lower()
-                 for l in read("requirements-serve.txt").splitlines() if l.strip() and not l.startswith("#")}
+        names = {re.split(r"[<>=\[]", ln)[0].strip().lower()
+                 for ln in read("requirements-serve.txt").splitlines() if ln.strip() and not ln.startswith("#")}
         assert {"fastapi", "uvicorn", "mlflow-skinny", "skops", "prometheus-client"} <= names
         assert not names & {"mlflow", "evidently", "zenml", "jupyter", "dvc", "pytest", "matplotlib"}
 

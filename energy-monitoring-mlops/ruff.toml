@@ -1,0 +1,9 @@
+# Lint config for CI (ruff check .). Pins the error-class rules - pyflakes
+# (F) and the syntax/statement checks (E4, E7, E9) - so the gate catches
+# real defects rather than style churn between ruff releases.
+target-version = "py312"
+line-length = 120
+extend-exclude = ["venv", "notebooks", "mlruns", ".zen", ".dvc", "dvc_storage_remote"]
+
+[lint]
+select = ["E4", "E7", "E9", "F"]

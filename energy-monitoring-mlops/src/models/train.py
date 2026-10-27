@@ -7,7 +7,6 @@ All runs logged to MLflow. Models saved as .joblib artifacts.
 
 import os
 import warnings
-import numpy as np
 import pandas as pd
 import joblib
 import mlflow

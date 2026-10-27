@@ -6,7 +6,6 @@ Loads and validates the raw energydata_complete.csv dataset.
 
 import os
 import pandas as pd
-import numpy as np
 
 RAW_DATA_PATH = os.path.join(
     os.path.dirname(__file__), "..", "..", "data", "raw", "energydata_complete.csv"
