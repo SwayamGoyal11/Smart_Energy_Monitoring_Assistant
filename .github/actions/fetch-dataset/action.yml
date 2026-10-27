@@ -1,0 +1,41 @@
+name: Fetch dataset
+description: >
+  Place energydata_complete.csv at data/raw/ without a DVC remote. Downloads the
+  public UCI Appliances Energy Prediction archive and verifies it against the MD5
+  recorded in the DVC pointer, so CI tests the exact bytes DVC tracks.
+
+inputs:
+  project-dir:
+    description: Project root containing data/raw/energydata_complete.csv.dvc
+    default: energy-monitoring-mlops
+
+runs:
+  using: composite
+  steps:
+    - name: Read expected hash from DVC pointer
+      id: dvc
+      shell: bash
+      run: |
+        md5=$(awk '/md5:/ {print $NF; exit}' "${{ inputs.project-dir }}/data/raw/energydata_complete.csv.dvc")
+        echo "md5=$md5" >> "$GITHUB_OUTPUT"
+
+    - name: Restore dataset cache
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ inputs.project-dir }}/data/raw/energydata_complete.csv
+        key: energydata-${{ steps.dvc.outputs.md5 }}
+
+    - name: Download from UCI
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        curl -fsSL --retry 3 -o "$RUNNER_TEMP/energydata.zip" \
+          https://archive.ics.uci.edu/static/public/374/appliances+energy+prediction.zip
+        unzip -o -j "$RUNNER_TEMP/energydata.zip" energydata_complete.csv \
+          -d "${{ inputs.project-dir }}/data/raw"
+
+    - name: Verify MD5 against DVC pointer
+      shell: bash
+      run: |
+        echo "${{ steps.dvc.outputs.md5 }}  ${{ inputs.project-dir }}/data/raw/energydata_complete.csv" | md5sum -c -

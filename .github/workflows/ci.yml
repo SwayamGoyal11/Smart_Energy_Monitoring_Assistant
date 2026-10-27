@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+  PROJECT_DIR: energy-monitoring-mlops
+  MLFLOW_DISABLE_AGENT_HINT: "1"
+
+defaults:
+  run:
+    working-directory: energy-monitoring-mlops
+
+jobs:
+  lint:
+    name: Lint & code quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      # Rule set lives in energy-monitoring-mlops/ruff.toml
+      - name: Ruff
+        run: uvx ruff check . --output-format=github
+
+  test:
+    name: PyTest suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: ${{ env.PROJECT_DIR }}/requirements*.txt
+      - name: Install dependencies
+        run: uv pip install --system -r requirements.txt
+      - uses: ./.github/actions/fetch-dataset
+        with:
+          project-dir: ${{ env.PROJECT_DIR }}
+      # Tests build throwaway MLflow stores under tmp_path; no registry or DVC remote needed.
+      - name: Run tests
+        run: python -m pytest tests/ -q --junitxml=pytest-report.xml --cov=src --cov-report=term
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-report
+          path: ${{ env.PROJECT_DIR }}/pytest-report.xml
+
+  docker:
+    name: Docker build verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.PROJECT_DIR }}
+          push: false
+          load: true
+          tags: energy-forecaster-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # The model is mounted at runtime, so verify the image imports the app
+      # and runs as the non-root user rather than starting the server.
+      - name: Smoke-test image
+        run: |
+          docker run --rm energy-forecaster-api:ci python -c "import src.api.app"
+          test "$(docker run --rm energy-forecaster-api:ci id -u)" = "10001"
+
+  quality-gate:
+    name: Quality gate check
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: ${{ env.PROJECT_DIR }}/requirements*.txt
+      - name: Install dependencies
+        run: uv pip install --system -r requirements.txt
+      - uses: ./.github/actions/fetch-dataset
+        with:
+          project-dir: ${{ env.PROJECT_DIR }}
+      # Trains the candidates, checks MAE/RMSE/R2 thresholds and the
+      # persistence-baseline RMSE on val and test; exits 1 if none pass.
+      - name: Train and gate candidates
+        env:
+          MLFLOW_TRACKING_URI: sqlite:///${{ runner.temp }}/ci-mlflow.db
+        run: python run_registry.py --models hurdle linear_regression
