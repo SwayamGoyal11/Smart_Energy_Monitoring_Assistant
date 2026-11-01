@@ -13,7 +13,8 @@ FROM python:${PYTHON_VERSION}-slim AS builder
 
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    UV_HTTP_TIMEOUT=300
 
 COPY --from=ghcr.io/astral-sh/uv:0.6.5 /uv /uvx /bin/
 
