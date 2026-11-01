@@ -1,0 +1,23 @@
+{
+  "model_name": "energy-forecaster",
+  "model_version": "5",
+  "alias": "champion",
+  "run_id": "e78a36504a434cfa832213de713c6278",
+  "model_type": "hurdle",
+  "quality_gate": "passed",
+  "metrics": {
+    "val_mae": 24.6347,
+    "val_rmse": 59.6618,
+    "val_r2": 0.5817,
+    "test_mae": 26.2072,
+    "test_rmse": 62.5553,
+    "test_r2": 0.5263,
+    "baseline_val_mae": 26.1541,
+    "baseline_val_rmse": 66.4376,
+    "baseline_val_r2": 0.4813,
+    "baseline_test_mae": 26.7466,
+    "baseline_test_rmse": 66.8482,
+    "baseline_test_r2": 0.459
+  },
+  "exported_at": "2026-10-27T16:41:13.725646+00:00"
+}

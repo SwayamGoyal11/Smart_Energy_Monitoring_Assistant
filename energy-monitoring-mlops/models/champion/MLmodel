@@ -1,0 +1,60 @@
+artifact_path: file:C:/Users/ASUS/Smart_Energy_Monitoring_Assistant/energy-monitoring-mlops/mlruns/1/models/m-423b5134d03542fb89aa5508e9671d8a/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.skops
+    predict_fn: predict
+    python_version: 3.12.10
+  sklearn:
+    code: null
+    pickled_model: model.skops
+    serialization_format: skops
+    sklearn_version: 1.9.1
+    skops_trusted_types:
+    - sklearn.tree._tree.Tree
+    - sklearn.ensemble._hist_gradient_boosting.predictor.TreePredictor
+    - src.models.hurdle.HurdleModel
+is_signature_from_type_hint: false
+mlflow_version: 3.17.1
+model_id: m-423b5134d03542fb89aa5508e9671d8a
+model_size_bytes: 1262140
+model_uuid: m-423b5134d03542fb89aa5508e9671d8a
+prompts: null
+run_id: e78a36504a434cfa832213de713c6278
+saved_input_example_info:
+  artifact_path: input_example.json
+  pandas_orient: split
+  serving_input_path: serving_input_example.json
+  type: dataframe
+signature:
+  inputs: '[{"type": "double", "name": "hour", "required": true}, {"type": "double",
+    "name": "day", "required": true}, {"type": "double", "name": "day_of_week", "required":
+    true}, {"type": "double", "name": "month", "required": true}, {"type": "double",
+    "name": "is_weekend", "required": true}, {"type": "double", "name": "hour_sin",
+    "required": true}, {"type": "double", "name": "hour_cos", "required": true}, {"type":
+    "double", "name": "day_of_week_sin", "required": true}, {"type": "double", "name":
+    "day_of_week_cos", "required": true}, {"type": "double", "name": "month_sin",
+    "required": true}, {"type": "double", "name": "month_cos", "required": true},
+    {"type": "double", "name": "Appliances_lag_1", "required": true}, {"type": "double",
+    "name": "Appliances_lag_2", "required": true}, {"type": "double", "name": "Appliances_lag_3",
+    "required": true}, {"type": "double", "name": "Appliances_rolling_mean_3", "required":
+    true}, {"type": "double", "name": "Appliances_rolling_mean_6", "required": true},
+    {"type": "double", "name": "Appliances_rolling_std_6", "required": true}, {"type":
+    "double", "name": "T1", "required": true}, {"type": "double", "name": "RH_1",
+    "required": true}, {"type": "double", "name": "T2", "required": true}, {"type":
+    "double", "name": "RH_2", "required": true}, {"type": "double", "name": "T3",
+    "required": true}, {"type": "double", "name": "RH_3", "required": true}, {"type":
+    "double", "name": "T6", "required": true}, {"type": "double", "name": "RH_6",
+    "required": true}, {"type": "double", "name": "T_out", "required": true}, {"type":
+    "double", "name": "Press_mm_hg", "required": true}, {"type": "double", "name":
+    "RH_out", "required": true}, {"type": "double", "name": "Windspeed", "required":
+    true}, {"type": "double", "name": "Visibility", "required": true}, {"type": "double",
+    "name": "Tdewpoint", "required": true}, {"type": "double", "name": "lights", "required":
+    true}]'
+  outputs: '[{"type": "double", "required": true}]'
+  params: null
+type_hint_from_example: false
+utc_time_created: '2026-10-27 15:22:42.077753'

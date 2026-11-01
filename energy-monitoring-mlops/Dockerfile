@@ -2,11 +2,8 @@
 # ============================================================
 # Smart Energy Monitoring Assistant - inference API image
 #
-#   python scripts/export_champion.py      # models/champion (mounted at runtime)
+#   python scripts/export_champion.py      # models/champion
 #   docker build -t energy-forecaster-api .
-#
-# The model is not baked in: compose mounts ./models/champion read-only at
-# /app/models/champion, so a new champion ships without rebuilding.
 # ============================================================
 
 ARG PYTHON_VERSION=3.12
@@ -45,6 +42,9 @@ RUN groupadd --system --gid 10001 app \
 WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
 COPY --chown=app:app src/ ./src/
+
+# Baked champion model artifact for standalone cloud deployments (Render/Cloud run)
+COPY --chown=app:app models/champion/ ./models/champion/
 
 # Writable paths for the non-root user: the app creates models/ and
 # reports/evidence/ on import, and appends the inference log under data/.
