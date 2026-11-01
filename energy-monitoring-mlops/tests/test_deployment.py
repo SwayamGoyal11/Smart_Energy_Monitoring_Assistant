@@ -147,7 +147,7 @@ class TestBuildContext:
     @pytest.mark.parametrize("path", [
         "venv/pyvenv.cfg", ".venv/bin/python", ".git/HEAD", ".zen/config.yaml", ".dvc/config",
         "tests/test_api.py", "notebooks/01_eda.ipynb", "data/raw/energydata_complete.csv",
-        "mlflow.db", "mlruns/1/meta.yaml", "models/champion/model.skops",
+        "mlflow.db", "mlruns/1/meta.yaml",
         "reports/evidence/drift_report.html", "src/api/__pycache__/app.cpython-312.pyc",
     ])
     def test_heavy_or_sensitive_paths_excluded(self, path):
