@@ -30,6 +30,8 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 
 from src.api.model_loader import LoadedModel, champion_matches, load_serving_model
 from src.api.schemas import (
@@ -150,6 +152,11 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         version="1.0.0",
         lifespan=lifespan,
     )
+
+    @app.get("/", include_in_schema=False)
+    def root():
+        return RedirectResponse(url="/docs")
+    
     app.state.settings = settings
     app.state.loaded = None
     app.state.stage_model = None
