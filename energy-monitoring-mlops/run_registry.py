@@ -15,6 +15,7 @@ RMSE also gets 'champion'. View the registry with:
 import argparse
 import os
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -65,8 +66,11 @@ def main():
     for name in args.models:
         cls, params = CANDIDATES[name]
         print(f"\n  Training {name}...")
+        start = time.perf_counter()
         model = cls(**params).fit(X_train, y_train)
-        result = register_candidate(model, name, val_df, test_df, params=params)
+        fit_seconds = time.perf_counter() - start
+        result = register_candidate(model, name, val_df, test_df, params=params,
+                                    train_df=train_df, fit_seconds=fit_seconds)
         results.append(result)
 
         status = "PASSED" if result.gates_passed else "FAILED"

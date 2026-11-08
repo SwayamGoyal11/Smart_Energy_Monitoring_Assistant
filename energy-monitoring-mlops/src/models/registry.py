@@ -14,6 +14,7 @@ Selection uses validation RMSE so the test split is never used to choose
 between models; test is only a pass/fail release check.
 """
 
+import logging
 import os
 import subprocess
 from dataclasses import dataclass, field
@@ -24,6 +25,7 @@ import mlflow.sklearn
 import mlflow.xgboost
 import pandas as pd
 from mlflow.exceptions import MlflowException
+from mlflow.models import infer_signature
 from mlflow.tracking import MlflowClient
 from xgboost import XGBModel
 
@@ -32,6 +34,8 @@ from src.models.quality_gates import QualityThresholds, evaluate_quality_gates
 from src.models.train import EXPERIMENT_NAME, MLFLOW_URI
 from src.features.feature_engineering import get_X_y
 from src.validation.input_validation import validate_feature_frame
+
+logger = logging.getLogger(__name__)
 
 REGISTERED_MODEL = "energy-forecaster"
 STAGING_ALIAS = "staging"
@@ -91,17 +95,64 @@ def _split_metrics(model, frame: pd.DataFrame) -> tuple:
     return compute_metrics(y, model.predict(X)), compute_metrics(y, X["Appliances_lag_1"])
 
 
-def _log_model(model, example: pd.DataFrame):
+def _log_model(model, example: pd.DataFrame, signature):
     """Log with the native flavor: XGBoost boosters are not skops-serializable."""
     if isinstance(model, XGBModel):
         return mlflow.xgboost.log_model(
-            model, name="model", input_example=example,
+            model, name="model", input_example=example, signature=signature,
             pip_requirements=INFERENCE_REQUIREMENTS + [XGBOOST_REQUIREMENT],
         )
     return mlflow.sklearn.log_model(
-        model, name="model", input_example=example, skops_trusted_types=SKOPS_TRUSTED_TYPES,
-        pip_requirements=INFERENCE_REQUIREMENTS,
+        model, name="model", input_example=example, signature=signature,
+        skops_trusted_types=SKOPS_TRUSTED_TYPES, pip_requirements=INFERENCE_REQUIREMENTS,
     )
+
+
+def _log_run_artifacts(al, model, model_type, train_df, val_df, test_df, metrics, failures,
+                       thresholds, signature, params, fit_seconds, registered_model_name) -> dict:
+    """Metadata, lineage, features, config, CV curves, diagnostics, deployment, drift baseline."""
+    al.log_run_metadata(model_type, fit_seconds=fit_seconds)
+
+    X_train = y_train = None
+    if train_df is not None:
+        X_train, y_train = get_X_y(train_df)
+        X_train = validate_feature_frame(X_train)
+    X_val, y_val = get_X_y(val_df)
+    X_val = validate_feature_frame(X_val)
+    X_test, y_test = get_X_y(test_df)
+    X_test = validate_feature_frame(X_test)
+
+    al.log_data_lineage(train_df, val_df, test_df)
+    al.log_feature_artifacts(model, X_train, X_val, y_val)
+    al.log_preprocessing_artifacts(model, list(X_val.columns))
+    al.log_model_config(model, model_type, thresholds, params=params)
+    flat = {}
+    if X_train is not None:
+        flat.update(al.log_cv_convergence(model, X_train, y_train))
+    else:
+        logger.info("No train_df passed; skipping CV convergence curves")
+    flat.update(al.log_evaluation_artifacts(
+        model, {"validation": (X_val, y_val), "test": (X_test, y_test)}, metrics, failures,
+    ))
+    flat.update(al.log_deployment_artifacts(model, signature, test_df, registered_model_name))
+    if X_train is not None:
+        al.log_monitoring_baseline(model, X_train, y_train, source_split="train")
+    else:
+        al.log_monitoring_baseline(model, X_val, y_val, source_split="validation")
+    return flat
+
+
+def _log_gate_outcome(model_type, val_m, test_m, failures, fit_seconds) -> None:
+    if fit_seconds is not None:
+        logger.info("Fitted %s in %.2fs", model_type, fit_seconds)
+    for split, m in (("val", val_m), ("test", test_m)):
+        logger.info("%s %s | MAE %.2f RMSE %.2f R2 %.3f", model_type, split,
+                    m["mae"], m["rmse"], m["r2"])
+    if failures:
+        for failure in failures:
+            logger.warning("Quality gate failed: %s", failure)
+    else:
+        logger.info("Quality gates passed on validation and test")
 
 
 def _champion_score(client: MlflowClient, name: str) -> Optional[float]:
@@ -121,11 +172,18 @@ def register_candidate(
     thresholds: QualityThresholds = QualityThresholds(),
     registered_model_name: str = REGISTERED_MODEL,
     experiment_name: str = EXPERIMENT_NAME,
+    train_df: Optional[pd.DataFrame] = None,
+    log_artifacts: bool = True,
+    fit_seconds: Optional[float] = None,
 ) -> RegistrationResult:
     """
     Log a fitted model, evaluate the release gates, register a new version,
     and assign staging/champion aliases only when the gates pass.
     The caller is responsible for mlflow.set_tracking_uri().
+
+    With log_artifacts, the run also gets the audit artifacts described in
+    src/models/artifact_logging.py; pass train_df so the drift baseline and
+    split summary cover the training split (otherwise validation is used).
     """
     val_m, val_base = _split_metrics(model, val_df)
     test_m, test_base = _split_metrics(model, test_df)
@@ -140,6 +198,7 @@ def register_candidate(
     metrics.update({f"baseline_test_{k}": v for k, v in test_base.items()})
 
     example = validate_feature_frame(get_X_y(val_df)[0]).head(5)
+    signature = infer_signature(example, model.predict(example))
     mlflow.set_experiment(experiment_name)
     with mlflow.start_run(run_name=f"registry_{model_type}") as run:
         mlflow.log_param("model", model_type)
@@ -153,9 +212,25 @@ def register_candidate(
             "quality_gate": "passed" if passed else "failed",
             "git_commit": _git_commit(),
         })
+        if fit_seconds is not None:
+            mlflow.log_metric("fit_seconds", round(fit_seconds, 3))
         if failures:
-            mlflow.log_text("\n".join(failures), "quality_gate_failures.txt")
-        info = _log_model(model, example)
+            mlflow.log_text("\n".join(failures), "evaluation/quality_gate_failures.txt")
+        if log_artifacts:
+            # Lazy import: artifact_logging needs matplotlib/seaborn, which the serving
+            # image (which imports this module via src.api.app) does not install.
+            from src.models import artifact_logging as al
+
+            with al.capture_run_log():
+                _log_gate_outcome(model_type, val_m, test_m, failures, fit_seconds)
+                mlflow.log_metrics(_log_run_artifacts(
+                    al, model, model_type, train_df, val_df, test_df, metrics, failures,
+                    thresholds, signature, params, fit_seconds, registered_model_name,
+                ))
+                info = _log_model(model, example, signature)
+                logger.info("Model logged: %s", info.model_uri)
+        else:
+            info = _log_model(model, example, signature)
 
     client = MlflowClient()
     version = mlflow.register_model(info.model_uri, registered_model_name).version

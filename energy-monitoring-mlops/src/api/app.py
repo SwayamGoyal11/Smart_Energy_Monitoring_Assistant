@@ -28,10 +28,8 @@ from typing import List, Optional
 import numpy as np
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
-from fastapi import FastAPI
-from fastapi.responses import RedirectResponse
 
 from src.api.model_loader import LoadedModel, champion_matches, load_serving_model
 from src.api.schemas import (
