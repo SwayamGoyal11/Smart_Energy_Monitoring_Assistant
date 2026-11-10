@@ -9,6 +9,12 @@ It covers the full lifecycle: DVC-versioned data, leak-free time-series features
 
 All project code lives in [`energy-monitoring-mlops/`](energy-monitoring-mlops/); commands below run from that directory unless noted.
 
+## Project status
+
+The project implementation is complete across data versioning, time-series feature engineering, model training and evaluation, MLflow tracking and registry, FastAPI serving, monitoring, and CI/CD deployment. The sections below describe the implemented architecture and the current serving model.
+
+Seven empty commits were added to the Git history as progress checkpoints for these areas: dataset versioning, feature engineering, model training and evaluation, MLflow registry, API serving, monitoring and drift detection, and CI/CD deployment. They are history-only markers; the implementation they refer to is in the earlier project commits, and the checkpoint commits do not change the source tree.
+
 ---
 
 ## Architecture
