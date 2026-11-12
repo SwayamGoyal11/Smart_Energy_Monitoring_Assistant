@@ -52,7 +52,7 @@ flowchart LR
 | Data versioning | DVC (MD5-pinned raw CSV) | `data/raw/energydata_complete.csv.dvc` |
 | Features | Calendar/cyclical time features, consumption lags 1-3, rolling mean/std on the shifted target | `src/features/feature_engineering.py` |
 | Experiment tracking & registry | MLflow (SQLite `mlflow.db`), aliases `staging` / `champion` | `src/models/registry.py`, `run_registry.py` |
-| Orchestration (optional) | ZenML pipeline over the same steps | `src/pipelines/`, [docs/zenml.md](energy-monitoring-mlops/docs/zenml.md) |
+| Orchestration (optional) | ZenML wrapper over the existing hurdle training and registry | `pipelines/zenml_pipeline.py`, `run_zenml.py`, [wrapper guide](energy-monitoring-mlops/docs/zenml_wrapper.md) |
 | Serving | FastAPI + Pydantic contract; features rebuilt server-side from raw readings | `src/api/`, `src/serving/schemas.py` |
 | Observability | Prometheus metrics + alert rules, provisioned Grafana dashboard | `src/monitoring/metrics.py`, `prometheus/`, `grafana/` |
 | Drift detection | Evidently (normed Wasserstein, alert at ≥ 0.1) on inputs and predictions | `src/monitoring/drift.py` |
@@ -245,6 +245,119 @@ python -m ruff check .
 ```
 
 `pytest` runs 243 tests in about 3 minutes; `ruff` applies the same lint gate as CI. Tests that touch the registry or API build throwaway MLflow stores under pytest's `tmp_path` and never read or write the project's `mlflow.db`.
+
+---
+
+## Running the ZenML pipeline (Windows PowerShell)
+
+The optional [`run_zenml.py`](energy-monitoring-mlops/run_zenml.py) entry point wraps the existing data loading, feature engineering, two-stage Hurdle model, MLflow artifact logging, and quality-gated registry. Existing DVC stages, training entry points, `src/models/artifact_logging.py`, and `src/models/registry.py` remain unchanged.
+
+```mermaid
+flowchart LR
+    A[load_data] --> B[preprocess]
+    B --> C[train_hurdle]
+    C --> D[log_and_register]
+    B --> D
+```
+
+| Step | What it does | Named output artifacts |
+|---|---|---|
+| `load_data` | Loads the DVC-materialized CSV and sorts timestamps | `raw_data` |
+| `preprocess` | Builds existing features and chronological 70/15/15 splits | `train_df`, `val_df`, `test_df` |
+| `train_hurdle` | Fits the Hurdle model; tracks training with `mlflow_tracker` | `hurdle_model`, `fit_seconds`, `training_run_id` |
+| `log_and_register` | Calls the existing registry helper for evaluation, full artifact logging, version creation, and gated aliases | `registration_result` |
+
+Outputs use `Annotated` names. The model crosses steps through a custom **skops materializer** using the registry's trust allowlist. Logging and registration stay together because the existing helper owns its MLflow run; that run is linked to the ZenML-tracked training run. Caching is disabled so each invocation reads current input and registers a fresh candidate.
+
+### Set up the environment and stack
+
+Run from `energy-monitoring-mlops/` after installing the project requirements and materializing the dataset as described above. Repeat the environment variables in each new PowerShell terminal. This checkout's completed runs use `.zen/wrapper-validation`; using another ZenML configuration directory selects a different store.
+
+```powershell
+.\venv\Scripts\python.exe -m pip install uv
+$env:VIRTUAL_ENV = (Resolve-Path .\venv).Path
+$env:Path = "$env:VIRTUAL_ENV\Scripts;$env:Path"
+$env:ZENML_CONFIG_PATH = Join-Path $PWD '.zen/wrapper-validation'
+$env:PYTHONIOENCODING = 'utf-8'
+$env:MLFLOW_DISABLE_AGENT_HINT = '1'
+uv pip install --python .\venv\Scripts\python.exe "zenml[server,mlflow]>=0.98.0,<1.0.0"
+uv run --active --no-project zenml integration install mlflow --uv -y
+
+# Initialize once on a fresh checkout, before registering the stack.
+if (!(Test-Path .zen/config.yaml)) { uv run --active --no-project zenml init }
+
+# Match the existing project's SQLite tracking URI exactly.
+$env:MLFLOW_TRACKING_URI = (& .\venv\Scripts\python.exe -c 'from src.models.registry import tracking_uri; print(tracking_uri())').Trim()
+
+# Register once; these names are already configured in this local checkout.
+uv run --active --no-project zenml experiment-tracker register mlflow_tracker --flavor=mlflow "--tracking_uri=$env:MLFLOW_TRACKING_URI"
+uv run --active --no-project zenml stack register energy_mlflow_stack -a default -o default -e mlflow_tracker --set
+```
+
+If the tracker and stack already exist, skip their registration and select the stack:
+
+```powershell
+uv run --active --no-project zenml stack set energy_mlflow_stack
+uv run --active --no-project zenml stack describe energy_mlflow_stack
+uv run --active --no-project zenml experiment-tracker describe mlflow_tracker
+```
+
+### Execute all four steps
+
+```powershell
+# If the raw CSV is absent and the configured DVC remote is available:
+uv run --active --no-project dvc pull
+
+uv run --active --no-project python run_zenml.py
+# Optional: choose a different input CSV with the same schema.
+# uv run --active --no-project python run_zenml.py --raw-data data/raw/energydata_complete.csv
+```
+
+Expect all four steps to finish with status **completed**. Quality-gate failures make the pipeline fail while retaining the registered candidate for audit. A passing candidate receives `staging`; `champion` changes only if validation RMSE improves on the existing champion. Training does not automatically export or redeploy the serving model.
+
+### Open the Docker dashboard
+
+Start Docker Desktop. For the existing dashboard container:
+
+```powershell
+docker start energy-zenml-dashboard
+docker ps --filter name=energy-zenml-dashboard
+Invoke-WebRequest http://localhost:8237/health -UseBasicParsing
+```
+
+Open **[http://localhost:8237](http://localhost:8237)**. Select project **default**, then **Pipelines → energy_hurdle_pipeline**, and open a completed run. The graph shows the four steps and their artifact nodes; click a step's outputs or an artifact to inspect its type, version, and lineage.
+
+For a new Docker deployment, the ZenML CLI command is:
+
+```powershell
+$env:DOCKER_HOST = 'npipe:////./pipe/dockerDesktopLinuxEngine'
+uv run --active --no-project zenml login --local --docker --port 8237
+```
+
+ZenML **0.98.0** generated `/service\service.json` inside the Linux container on this Windows checkout, so that command failed. The running dashboard uses the official `zenmldocker/zenml-server:0.98.0` image directly, with the existing database mounted at a Linux path. Follow the [verified Docker creation commands](energy-monitoring-mlops/docs/zenml_wrapper.md#verified-docker-dashboard-on-this-windows-checkout) if the container does not exist. Native `zenml up` is deprecated and native Windows daemon startup is unsupported. Artifact metadata and graph nodes are verified; file previews from their original Windows paths inside Linux remain unverified.
+
+### Inspect MLflow and the verified run
+
+In another terminal with the same environment setup:
+
+```powershell
+uv run --active --no-project mlflow ui --backend-store-uri "$env:MLFLOW_TRACKING_URI" --port 5000
+```
+
+Open **[http://localhost:5000](http://localhost:5000)**, select experiment `energy-consumption-prediction`, and inspect the training run and its linked registry run. Open registered model **energy-forecaster** to see versions, gate tags, and aliases.
+
+The end-to-end run verified on **12 November 2026** completed all four steps, reloaded the skops artifact, and passed a prediction check:
+
+| Item | Verified value |
+|---|---|
+| ZenML run | `energy_hurdle_pipeline-2026_11_12-13_04_00_016944` |
+| ZenML run ID | `9c09347c-059b-4333-a195-14007109586b` |
+| MLflow training run | `ea76fca985d2489595981974799aaf52` |
+| MLflow registry run | `e0d8dcba62934afeb62b8e7cef5f7a06` |
+| Candidate | Version **16**, gates passed, `staging`, validation RMSE **59.6986** |
+| Champion | Version **5**, validation RMSE **59.6618**; retained because its score is better |
+
+These IDs and local runs are specific to this checkout; a fresh clone generates its own. `.zen/`, local logs, `mlflow.db`, and its SQLite sidecar files are ignored by Git. Full details are in the [ZenML wrapper guide](energy-monitoring-mlops/docs/zenml_wrapper.md).
 
 ---
 
@@ -497,7 +610,8 @@ energy-monitoring-mlops/
 
 - [Model card](energy-monitoring-mlops/docs/model_card.md): split protocol, benchmarks, hurdle design, failure modes, release gates.
 - [Deployment runbook](energy-monitoring-mlops/docs/deployment.md): image design, compose stack, alerts.
-- [ZenML pipeline](energy-monitoring-mlops/docs/zenml.md): optional orchestration setup.
+- [ZenML Hurdle wrapper](energy-monitoring-mlops/docs/zenml_wrapper.md): four-step pipeline, Windows/uv setup, MLflow linking, and verified Docker dashboard commands.
+- [Earlier ZenML pipeline](energy-monitoring-mlops/docs/zenml.md): original orchestration setup.
 
 ---
 
