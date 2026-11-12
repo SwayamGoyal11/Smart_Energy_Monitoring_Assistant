@@ -19,6 +19,7 @@ venv/
 mlruns/
 mlartifacts/
 mlflow.db
+mlflow.db-*
 
 # DVC - raw and processed data tracked by DVC, not Git
 /data/raw/energydata_complete.csv
