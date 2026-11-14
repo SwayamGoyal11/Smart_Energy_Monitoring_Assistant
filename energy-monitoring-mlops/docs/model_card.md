@@ -187,7 +187,7 @@ Drift alone is not enough on purpose. The unshifted test split already drifts se
 
 - RMSE rises **+16.8%** and breaches the 65 Wh gate, and MAE rises +17.0%.
 - Prediction drift (0.245) and target drift (0.241) also exceed the 0.1 threshold.
-- Evidence files: [`retraining_trigger_evidence.json`](../reports/evidence/retraining_trigger_evidence.json), [`drift_metrics.json`](../reports/evidence/drift_metrics.json) and [`drift_report.html`](../reports/evidence/drift_report.html).
+- Evidence files: [`retraining_trigger_evidence.json`](../reports/evidence/retraining_trigger_evidence.json), [`heatwave_drift_metrics.json`](../reports/evidence/heatwave_drift_metrics.json) and [`heatwave_drift_report.html`](../reports/evidence/heatwave_drift_report.html).
 
 ### 6.6 Closed loop: retrain → promote → export → redeploy
 1. Retrain with `python run_registry.py` (or the ZenML pipeline). Candidates are gated and promoted under §5.
@@ -236,5 +236,5 @@ Only roll back to a version tagged `quality_gate=passed`. If the target has a wo
 ## 9. References and Evidence
 
 - Candanedo, L. M., Feldheim, V., and Deramaix, D. (2017). *Data driven prediction models of energy use of appliances in a low-energy house.* Energy and Buildings, 140, 81–97. Dataset: [UCI Appliances Energy Prediction](https://archive.ics.uci.edu/dataset/374/appliances+energy+prediction).
-- Evidence (`reports/evidence/`): [`dataset_validation.json`](../reports/evidence/dataset_validation.json), [`model_comparison.csv`](../reports/evidence/model_comparison.csv) (Phase 1 baselines from `run_pipeline.py`), [`drift_report.html`](../reports/evidence/drift_report.html), [`drift_metrics.json`](../reports/evidence/drift_metrics.json), [`retraining_trigger_evidence.json`](../reports/evidence/retraining_trigger_evidence.json), [`retraining_lifecycle.md`](../reports/evidence/retraining_lifecycle.md).
+- Evidence (`reports/evidence/`): [`dataset_validation.json`](../reports/evidence/dataset_validation.json), [`model_comparison.csv`](../reports/evidence/model_comparison.csv) (Phase 1 baselines from `run_pipeline.py`), [`drift_report.html`](../reports/evidence/drift_report.html) and [`drift_metrics.json`](../reports/evidence/drift_metrics.json) (live clean baseline), [`heatwave_drift_report.html`](../reports/evidence/heatwave_drift_report.html) and [`heatwave_drift_metrics.json`](../reports/evidence/heatwave_drift_metrics.json) (experiment), [`retraining_trigger_evidence.json`](../reports/evidence/retraining_trigger_evidence.json), [`retraining_lifecycle.md`](../reports/evidence/retraining_lifecycle.md).
 - Runbooks: [`deployment.md`](deployment.md), [`zenml_wrapper.md`](zenml_wrapper.md).

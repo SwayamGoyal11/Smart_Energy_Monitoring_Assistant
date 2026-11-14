@@ -172,8 +172,23 @@ class TestCommittedEvidence:
         assert breaches["dataset_drift"]["observed_share"] >= breaches["dataset_drift"]["threshold_share"]
 
     def test_drift_metrics_match_evidence(self, evidence):
-        with open(os.path.join(EVIDENCE_DIR, "drift_metrics.json"), encoding="utf-8") as f:
+        # The experiment's own copy; the live drift_metrics.json holds the clean baseline.
+        artifacts = evidence["artifacts"]
+        assert artifacts["drift_metrics_json"] != "reports/evidence/drift_metrics.json"
+        assert os.path.isfile(os.path.join(ROOT, artifacts["drift_report_html"]))
+        with open(os.path.join(ROOT, artifacts["drift_metrics_json"]), encoding="utf-8") as f:
             metrics = json.load(f)
         assert metrics["dataset_drift"]["share"] == evidence["drifted"]["drift"]["drifted_feature_share"]
         assert metrics["current"]["rows"] == evidence["drifted"]["rows"]
         assert metrics["experiment"]["name"] == evidence["experiment"]["name"]
+
+    def test_live_drift_metrics_are_clean_baseline(self):
+        path = os.path.join(EVIDENCE_DIR, "drift_metrics.json")
+        if not os.path.isfile(path):
+            pytest.skip("no live drift_metrics.json")
+        with open(path, encoding="utf-8") as f:
+            metrics = json.load(f)
+        assert "experiment" not in metrics
+        assert metrics["dataset_drift"]["detected"] is False
+        assert metrics["dataset_drift"]["share"] < metrics["config"]["drift_share"]
+        assert metrics["alerts"] == []

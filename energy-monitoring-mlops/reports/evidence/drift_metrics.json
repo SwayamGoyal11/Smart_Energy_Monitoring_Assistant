@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-14T02:39:32.701182+00:00",
+  "generated_at": "2026-11-14T04:28:59.469719+00:00",
   "config": {
     "method": "wasserstein",
     "threshold": 0.1,
@@ -10,175 +10,108 @@
     "rows": 13810
   },
   "current": {
-    "rows": 2960,
-    "source": "deliberate drift experiment: summer_heatwave_sensor_bias_evening_burst (test-split window)",
-    "window": {
-      "split": "test",
-      "rows": 2960,
-      "start": "2016-05-07T04:50:00",
-      "end": "2016-05-27T18:00:00"
-    }
+    "rows": 300,
+    "source": "clean baseline: 300 train-split rows replayed through the API (python scripts/simulate_traffic.py --rows 300, then python -m src.monitoring.drift --current <log>)"
   },
   "dataset_drift": {
-    "detected": true,
-    "drifted_columns": [
-      "Appliances_lag_1",
-      "Appliances_lag_2",
-      "Appliances_lag_3",
-      "Appliances_rolling_mean_3",
-      "Appliances_rolling_mean_6",
-      "Press_mm_hg",
-      "RH_1",
-      "RH_2",
-      "RH_3",
-      "RH_6",
-      "RH_out",
-      "T1",
-      "T2",
-      "T3",
-      "T6",
-      "T_out",
-      "Tdewpoint",
-      "Visibility",
-      "Windspeed",
-      "lights"
-    ],
-    "drifted_count": 20,
+    "detected": false,
+    "drifted_columns": [],
+    "drifted_count": 0,
     "monitored_count": 21,
-    "share": 0.9524
+    "share": 0.0
   },
   "features": {
     "Appliances_lag_1": {
-      "score": 0.239447,
-      "drifted": true
+      "score": 0.060294,
+      "drifted": false
     },
     "Appliances_lag_2": {
-      "score": 0.238135,
-      "drifted": true
+      "score": 0.061427,
+      "drifted": false
     },
     "Appliances_lag_3": {
-      "score": 0.237606,
-      "drifted": true
+      "score": 0.044706,
+      "drifted": false
     },
     "Appliances_rolling_mean_3": {
-      "score": 0.259348,
-      "drifted": true
+      "score": 0.058933,
+      "drifted": false
     },
     "Appliances_rolling_mean_6": {
-      "score": 0.287953,
-      "drifted": true
+      "score": 0.045956,
+      "drifted": false
     },
     "Appliances_rolling_std_6": {
-      "score": 0.078826,
+      "score": 0.031731,
       "drifted": false
     },
     "T1": {
-      "score": 8.990307,
-      "drifted": true
+      "score": 0.0571,
+      "drifted": false
     },
     "RH_1": {
-      "score": 1.500047,
-      "drifted": true
+      "score": 0.059549,
+      "drifted": false
     },
     "T2": {
-      "score": 8.081109,
-      "drifted": true
+      "score": 0.040561,
+      "drifted": false
     },
     "RH_2": {
-      "score": 2.116235,
-      "drifted": true
+      "score": 0.067819,
+      "drifted": false
     },
     "T3": {
-      "score": 8.271272,
-      "drifted": true
+      "score": 0.044638,
+      "drifted": false
     },
     "RH_3": {
-      "score": 2.29246,
-      "drifted": true
+      "score": 0.040571,
+      "drifted": false
     },
     "T6": {
-      "score": 3.891938,
-      "drifted": true
+      "score": 0.034118,
+      "drifted": false
     },
     "RH_6": {
-      "score": 1.88742,
-      "drifted": true
+      "score": 0.032703,
+      "drifted": false
     },
     "T_out": {
-      "score": 4.047538,
-      "drifted": true
+      "score": 0.050756,
+      "drifted": false
     },
     "Press_mm_hg": {
-      "score": 0.346555,
-      "drifted": true
+      "score": 0.062857,
+      "drifted": false
     },
     "RH_out": {
-      "score": 1.783271,
-      "drifted": true
+      "score": 0.065514,
+      "drifted": false
     },
     "Windspeed": {
-      "score": 0.471848,
-      "drifted": true
+      "score": 0.064078,
+      "drifted": false
     },
     "Visibility": {
-      "score": 0.234916,
-      "drifted": true
+      "score": 0.026961,
+      "drifted": false
     },
     "Tdewpoint": {
-      "score": 1.781321,
-      "drifted": true
+      "score": 0.058507,
+      "drifted": false
     },
     "lights": {
-      "score": 0.297299,
-      "drifted": true
+      "score": 0.081999,
+      "drifted": false
     }
   },
   "prediction": {
     "column": "prediction",
-    "score": 0.245081,
-    "drifted": true
+    "score": 0.04996,
+    "drifted": false
   },
-  "target": {
-    "column": "Appliances",
-    "score": 0.240817,
-    "drifted": true
-  },
-  "alerts": [
-    "DATASET_DRIFT: 20/21 features drifted (share 0.95 >= 0.3)",
-    "PREDICTION_DRIFT: score 0.2451",
-    "TARGET_DRIFT: score 0.2408"
-  ],
-  "experiment": {
-    "name": "summer_heatwave_sensor_bias_evening_burst",
-    "scenario": {
-      "temperature_shift_c": {
-        "columns": [
-          "T1",
-          "T2",
-          "T3",
-          "T6",
-          "T_out"
-        ],
-        "delta": 8.0
-      },
-      "humidity_bias": {
-        "columns": [
-          "RH_1",
-          "RH_2",
-          "RH_3",
-          "RH_6",
-          "RH_out"
-        ],
-        "scale": 0.82,
-        "relative_change": -0.18
-      },
-      "evening_appliance_load": {
-        "hours": "17:00-22:59",
-        "scale": 1.5,
-        "offset_wh": 50.0
-      }
-    }
-  },
+  "alerts": [],
   "model": {
     "name": "energy-forecaster",
     "version": "5",

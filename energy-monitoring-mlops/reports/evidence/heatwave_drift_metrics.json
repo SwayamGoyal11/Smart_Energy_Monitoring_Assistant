@@ -1,0 +1,187 @@
+{
+  "generated_at": "2026-11-14T02:39:32.701182+00:00",
+  "config": {
+    "method": "wasserstein",
+    "threshold": 0.1,
+    "drift_share": 0.3,
+    "score_type": "distance"
+  },
+  "reference": {
+    "rows": 13810
+  },
+  "current": {
+    "rows": 2960,
+    "source": "deliberate drift experiment: summer_heatwave_sensor_bias_evening_burst (test-split window)",
+    "window": {
+      "split": "test",
+      "rows": 2960,
+      "start": "2016-05-07T04:50:00",
+      "end": "2016-05-27T18:00:00"
+    }
+  },
+  "dataset_drift": {
+    "detected": true,
+    "drifted_columns": [
+      "Appliances_lag_1",
+      "Appliances_lag_2",
+      "Appliances_lag_3",
+      "Appliances_rolling_mean_3",
+      "Appliances_rolling_mean_6",
+      "Press_mm_hg",
+      "RH_1",
+      "RH_2",
+      "RH_3",
+      "RH_6",
+      "RH_out",
+      "T1",
+      "T2",
+      "T3",
+      "T6",
+      "T_out",
+      "Tdewpoint",
+      "Visibility",
+      "Windspeed",
+      "lights"
+    ],
+    "drifted_count": 20,
+    "monitored_count": 21,
+    "share": 0.9524
+  },
+  "features": {
+    "Appliances_lag_1": {
+      "score": 0.239447,
+      "drifted": true
+    },
+    "Appliances_lag_2": {
+      "score": 0.238135,
+      "drifted": true
+    },
+    "Appliances_lag_3": {
+      "score": 0.237606,
+      "drifted": true
+    },
+    "Appliances_rolling_mean_3": {
+      "score": 0.259348,
+      "drifted": true
+    },
+    "Appliances_rolling_mean_6": {
+      "score": 0.287953,
+      "drifted": true
+    },
+    "Appliances_rolling_std_6": {
+      "score": 0.078826,
+      "drifted": false
+    },
+    "T1": {
+      "score": 8.990307,
+      "drifted": true
+    },
+    "RH_1": {
+      "score": 1.500047,
+      "drifted": true
+    },
+    "T2": {
+      "score": 8.081109,
+      "drifted": true
+    },
+    "RH_2": {
+      "score": 2.116235,
+      "drifted": true
+    },
+    "T3": {
+      "score": 8.271272,
+      "drifted": true
+    },
+    "RH_3": {
+      "score": 2.29246,
+      "drifted": true
+    },
+    "T6": {
+      "score": 3.891938,
+      "drifted": true
+    },
+    "RH_6": {
+      "score": 1.88742,
+      "drifted": true
+    },
+    "T_out": {
+      "score": 4.047538,
+      "drifted": true
+    },
+    "Press_mm_hg": {
+      "score": 0.346555,
+      "drifted": true
+    },
+    "RH_out": {
+      "score": 1.783271,
+      "drifted": true
+    },
+    "Windspeed": {
+      "score": 0.471848,
+      "drifted": true
+    },
+    "Visibility": {
+      "score": 0.234916,
+      "drifted": true
+    },
+    "Tdewpoint": {
+      "score": 1.781321,
+      "drifted": true
+    },
+    "lights": {
+      "score": 0.297299,
+      "drifted": true
+    }
+  },
+  "prediction": {
+    "column": "prediction",
+    "score": 0.245081,
+    "drifted": true
+  },
+  "target": {
+    "column": "Appliances",
+    "score": 0.240817,
+    "drifted": true
+  },
+  "alerts": [
+    "DATASET_DRIFT: 20/21 features drifted (share 0.95 >= 0.3)",
+    "PREDICTION_DRIFT: score 0.2451",
+    "TARGET_DRIFT: score 0.2408"
+  ],
+  "experiment": {
+    "name": "summer_heatwave_sensor_bias_evening_burst",
+    "scenario": {
+      "temperature_shift_c": {
+        "columns": [
+          "T1",
+          "T2",
+          "T3",
+          "T6",
+          "T_out"
+        ],
+        "delta": 8.0
+      },
+      "humidity_bias": {
+        "columns": [
+          "RH_1",
+          "RH_2",
+          "RH_3",
+          "RH_6",
+          "RH_out"
+        ],
+        "scale": 0.82,
+        "relative_change": -0.18
+      },
+      "evening_appliance_load": {
+        "hours": "17:00-22:59",
+        "scale": 1.5,
+        "offset_wh": 50.0
+      }
+    }
+  },
+  "model": {
+    "name": "energy-forecaster",
+    "version": "5",
+    "source": "registry:champion"
+  }
+}

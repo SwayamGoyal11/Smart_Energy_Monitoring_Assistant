@@ -255,7 +255,7 @@
     "RMSE up 16.8% vs baseline (limit 10%)"
   ],
   "artifacts": {
-    "drift_report_html": "reports/evidence/drift_report.html",
-    "drift_metrics_json": "reports/evidence/drift_metrics.json"
+    "drift_report_html": "reports/evidence/heatwave_drift_report.html",
+    "drift_metrics_json": "reports/evidence/heatwave_drift_metrics.json"
   }
 }
