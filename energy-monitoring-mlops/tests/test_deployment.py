@@ -74,13 +74,13 @@ def compose():
 @pytest.fixture(scope="module")
 def api_metric_names():
     names = {"up"}
+    # Labelled counters and histograms expose no samples until first observed,
+    # so derive their series names from each family's type.
+    suffixes = {"counter": ("_total",), "histogram": ("_bucket", "_count", "_sum")}
     for family in ApiMetrics().registry.collect():
         names.add(family.name)
         names.update(s.name for s in family.samples)
-    # Histogram/counter series that only appear once observed.
-    for base in ("http_request_duration_seconds", "model_prediction_value"):
-        names.update({f"{base}_bucket", f"{base}_count", f"{base}_sum"})
-    names.update({"http_requests_total", "model_stage_predictions_total"})
+        names.update(family.name + suffix for suffix in suffixes.get(family.type, ()))
     return names
 
 
@@ -266,3 +266,18 @@ class TestGrafanaProvisioning:
             assert not unknown, f"dashboard query references unknown metrics {unknown}: {expr}"
         assert all(t["datasource"]["uid"] == "prometheus"
                    for p in dash["panels"] for t in p.get("targets", []))
+
+    def test_dashboard_and_alerts_cover_core_metrics(self):
+        dash = json.loads(read("grafana/provisioning/dashboards/json/energy-forecaster.json"))
+        dash_names = set().union(*(promql_metric_names(t["expr"])
+                                   for p in dash["panels"] for t in p.get("targets", [])))
+        rules = yaml.safe_load(read("prometheus/alerts.yml"))["groups"][0]["rules"]
+        alert_names = set().union(*(promql_metric_names(r["expr"]) for r in rules))
+        core = {
+            "http_requests_total", "http_request_duration_seconds_bucket", "model_prediction_value_bucket",
+            "model_input_validation_failures_total", "model_drift_score", "model_drift_share",
+            "model_drift_detected", "model_active_stage_ratio",
+        }
+        assert core <= dash_names, core - dash_names
+        assert {"http_requests_total", "http_request_duration_seconds_bucket",
+                "model_input_validation_failures_total", "model_drift_detected"} <= alert_names

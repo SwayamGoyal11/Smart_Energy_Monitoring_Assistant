@@ -555,7 +555,7 @@ The default test-split report flags drift (20 of 21 features), because the test 
 
 ### Replay realistic traffic
 
-`scripts/simulate_traffic.py` posts real dataset rows to `/predict`. Each request carries the row's own timestamp and sensor readings plus the six actual readings before it, exactly as a client would send them. It writes what it sent to `data/monitoring/simulated_traffic.jsonl` in the inference-log format, so drift scores just this replay, not everything the API has served.
+`scripts/simulate_traffic.py` posts real dataset rows to `/predict/batch` in chronological batches that mix standby and active-burst intervals (rows above the hurdle model's 100 Wh boundary). Each row carries the row's own timestamp and sensor readings plus the six actual readings before it, exactly as a client would send them. It writes what it sent to `data/monitoring/simulated_traffic.jsonl` in the inference-log format, so drift scores just this replay, not everything the API has served.
 
 **PowerShell or bash** (with the stack running):
 
@@ -564,7 +564,16 @@ python scripts/simulate_traffic.py
 python -m src.monitoring.drift --current data/monitoring/simulated_traffic.jsonl
 ```
 
-Defaults are 250 rows (drift needs at least 200) sampled from the train split. Options: `--split train|val|test`, `--rows <n>`, `--seed <n>`, `--delay <seconds>` and `--url <base url>`. The script also prints the MAE against the actual readings.
+Defaults are 250 rows (drift needs at least 200) sampled from the train split, sent in batches of 5 with the split's natural standby/active mix. Options:
+
+- `--url <base url>`: any deployment, local or remote, e.g. a Render service URL (default `$ENERGY_API_URL` or `http://localhost:8000`). The script waits up to `--wait` seconds (default 90) for `/health`, so a sleeping free-tier instance can cold-start, and retries timeouts, 429 and 5xx responses (`--retries`, `--timeout`).
+- `--split train|val|test`, `--rows <n>`, `--seed <n>`, `--delay <seconds>`.
+- `--batch-size <n>`: rows per `/predict/batch` call; `1` sends single `/predict` requests.
+- `--active-share <0-1>`: force a share of active-burst rows instead of the natural mix. This skews the lag features, so it can trigger drift on its own.
+- `--invalid-share <0-1>`: share of all requests that are deliberately malformed (out-of-range sensor, wrong type, short history, unknown field). They are sent as single `/predict` calls, rejected with 422, counted in `model_input_validation_failures_total` (the **Validation rejections** panel and the `EnergyApiInputValidationFailures` alert), and never logged. The alert needs rejections above 10% of `/predict*` requests for 10 minutes, so the run must last that long: `--rows 1000 --invalid-share 0.15 --delay 3` sends about 380 requests over roughly 19 minutes (each batch counts as one request, so the rejected share of requests is well above 15%).
+- `--log <path>` / `--no-log`: where the JSON Lines traffic log goes, or skip it.
+
+The script prints the standby/active mix, the 422 count and the MAE against the actual readings, and exits with code 2 if any valid batch failed or an invalid payload was not rejected.
 
 Which split you replay decides what the dashboard shows, because drift is measured against the training split. Results with the default 250 rows and `--seed 42` (exact counts shift a little with the seed):
 

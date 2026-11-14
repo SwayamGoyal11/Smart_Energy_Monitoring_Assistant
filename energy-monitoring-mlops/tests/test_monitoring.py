@@ -450,3 +450,83 @@ class TestMetricsEndpoint:
     def test_metrics_hidden_from_openapi(self, monitored_app):
         client, _ = monitored_app
         assert "/metrics" not in client.get("/openapi.json").json()["paths"]
+
+
+# scripts/simulate_traffic.py, driven through the in-process app
+
+class TestTrafficSimulator:
+    BASE = "http://simulated"
+
+    @pytest.fixture(scope="class")
+    def sim(self):
+        from scripts import simulate_traffic
+        return simulate_traffic
+
+    @staticmethod
+    def poster(client, base):
+        def post(url, payload):
+            r = client.post(url[len(base):], json=payload)
+            return r.status_code, r.json()
+        return post
+
+    def test_natural_mix_has_standby_and_bursts(self, sim):
+        samples = sim.build_samples("train", 120, seed=3)
+        assert len(samples) == 120
+        stamps = [s.payload["target_timestamp"] for s in samples]
+        assert stamps == sorted(stamps)
+        n_active = sum(s.active for s in samples)
+        assert 0 < n_active < len(samples)
+
+    def test_forced_active_share(self, sim):
+        samples = sim.build_samples("train", 40, seed=3, active_share=0.5)
+        assert sum(s.active for s in samples) == 20
+
+    def test_plan_batches_and_invalid_share(self, sim):
+        samples = sim.build_samples("train", 23, seed=1)
+        steps = sim.plan_requests(samples, batch_size=5, invalid_share=0.2, seed=1)
+        batches = [item for kind, item in steps if kind == "batch"]
+        invalid = [item for kind, item in steps if kind == "invalid"]
+        assert [len(b) for b in batches] == [5, 5, 5, 5, 3]
+        assert len(invalid) == round(23 * 0.2 / 0.8)
+        with pytest.raises(ValueError):
+            sim.plan_requests(samples, batch_size=0, invalid_share=0.0, seed=1)
+
+    def test_every_invalid_kind_is_rejected(self, sim, monitored_app):
+        client, _ = monitored_app
+        for name, mutate in sim.INVALID_KINDS:
+            assert client.post("/predict", json=mutate(IDLE)).status_code == 422, name
+
+    def test_replay_feeds_metrics_and_jsonl_log(self, sim, monitored_app, tmp_path):
+        client, _ = monitored_app
+        samples = sim.build_samples("train", 30, seed=5)
+        steps = sim.plan_requests(samples, batch_size=4, invalid_share=0.25, seed=5)
+        n_invalid = sum(kind == "invalid" for kind, _ in steps)
+        log_path = tmp_path / "simulated.jsonl"
+        report = sim.run(self.BASE, steps, self.poster(client, self.BASE),
+                         InferenceLogger(str(log_path)), verbose=False)
+
+        assert report.accepted == 30 and report.failed == 0
+        assert report.rejected_expected == n_invalid > 0 and report.rejected_unexpected == 0
+        assert report.active == sum(s.active for s in samples)
+
+        s = scrape(client)
+        assert value(s, "model_prediction_value_count", model_version="local") == 30
+        assert value(s, "http_requests_total", method="POST", path="/predict/batch", status="200") == 8
+        rejected = sum(v for (name, _), v in s.items() if name == "model_input_validation_failures_total")
+        assert rejected == n_invalid
+        assert value(s, "model_stage_predictions_total", stage="active") +             value(s, "model_stage_predictions_total", stage="standby") == 30
+
+        log = load_inference_log(str(log_path))
+        assert len(log) == 30
+        assert log[PREDICTION_COL].tolist() == pytest.approx(report.predicted, abs=1e-3)
+        lines = log_path.read_text(encoding="utf-8").splitlines()
+        assert all(json.loads(line)["event"] == EVENT_TYPE for line in lines)
+
+    def test_single_request_mode(self, sim, monitored_app):
+        client, _ = monitored_app
+        samples = sim.build_samples("train", 3, seed=9)
+        steps = sim.plan_requests(samples, batch_size=1, invalid_share=0.0, seed=9)
+        report = sim.run(self.BASE, steps, self.poster(client, self.BASE), verbose=False)
+        assert report.accepted == 3
+        s = scrape(client)
+        assert value(s, "http_requests_total", method="POST", path="/predict", status="200") == 3
