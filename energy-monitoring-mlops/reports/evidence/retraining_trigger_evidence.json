@@ -1,0 +1,261 @@
+{
+  "generated_at": "2026-11-14T02:39:32.701182+00:00",
+  "experiment": {
+    "name": "summer_heatwave_sensor_bias_evening_burst",
+    "description": "Summer heatwave with humidity sensor bias and heavier evening appliance bursts, applied to the raw series; features rebuilt with the training code.",
+    "scenario": {
+      "temperature_shift_c": {
+        "columns": [
+          "T1",
+          "T2",
+          "T3",
+          "T6",
+          "T_out"
+        ],
+        "delta": 8.0
+      },
+      "humidity_bias": {
+        "columns": [
+          "RH_1",
+          "RH_2",
+          "RH_3",
+          "RH_6",
+          "RH_out"
+        ],
+        "scale": 0.82,
+        "relative_change": -0.18
+      },
+      "evening_appliance_load": {
+        "hours": "17:00-22:59",
+        "scale": 1.5,
+        "offset_wh": 50.0
+      }
+    },
+    "window": {
+      "split": "test",
+      "rows": 2960,
+      "start": "2016-05-07T04:50:00",
+      "end": "2016-05-27T18:00:00"
+    },
+    "reproduce": "python scripts/run_drift_experiment.py"
+  },
+  "model": {
+    "name": "energy-forecaster",
+    "version": "5",
+    "source": "registry:champion"
+  },
+  "drift_config": {
+    "method": "wasserstein",
+    "threshold": 0.1,
+    "drift_share": 0.3
+  },
+  "reference": {
+    "split": "train",
+    "rows": 13810,
+    "metrics": {
+      "mae": 26.8957,
+      "rmse": 60.8023,
+      "r2": 0.6763
+    }
+  },
+  "baseline": {
+    "description": "unshifted test split (same timestamps as the drifted batch)",
+    "rows": 2960,
+    "metrics": {
+      "mae": 26.2072,
+      "rmse": 62.5553,
+      "r2": 0.5263
+    },
+    "drift": {
+      "dataset_drift_detected": true,
+      "drifted_feature_share": 0.9524,
+      "drifted_count": 20,
+      "monitored_count": 21,
+      "drifted_columns": [
+        "Appliances_lag_1",
+        "Appliances_lag_2",
+        "Appliances_lag_3",
+        "Appliances_rolling_mean_3",
+        "Appliances_rolling_mean_6",
+        "Appliances_rolling_std_6",
+        "Press_mm_hg",
+        "RH_1",
+        "RH_2",
+        "RH_6",
+        "RH_out",
+        "T1",
+        "T2",
+        "T3",
+        "T6",
+        "T_out",
+        "Tdewpoint",
+        "Visibility",
+        "Windspeed",
+        "lights"
+      ],
+      "mean_feature_score": 0.952894,
+      "max_feature_score": 2.815206,
+      "alerts": [
+        "DATASET_DRIFT: 20/21 features drifted (share 0.95 >= 0.3)",
+        "PREDICTION_DRIFT: score 0.1060",
+        "TARGET_DRIFT: score 0.1076"
+      ],
+      "prediction_drift": {
+        "score": 0.106025,
+        "drifted": true
+      },
+      "target_drift": {
+        "score": 0.107609,
+        "drifted": true
+      }
+    }
+  },
+  "drifted": {
+    "rows": 2960,
+    "metrics": {
+      "mae": 30.6589,
+      "rmse": 73.0592,
+      "r2": 0.6328
+    },
+    "drift": {
+      "dataset_drift_detected": true,
+      "drifted_feature_share": 0.9524,
+      "drifted_count": 20,
+      "monitored_count": 21,
+      "drifted_columns": [
+        "Appliances_lag_1",
+        "Appliances_lag_2",
+        "Appliances_lag_3",
+        "Appliances_rolling_mean_3",
+        "Appliances_rolling_mean_6",
+        "Press_mm_hg",
+        "RH_1",
+        "RH_2",
+        "RH_3",
+        "RH_6",
+        "RH_out",
+        "T1",
+        "T2",
+        "T3",
+        "T6",
+        "T_out",
+        "Tdewpoint",
+        "Visibility",
+        "Windspeed",
+        "lights"
+      ],
+      "mean_feature_score": 2.254041,
+      "max_feature_score": 8.990307,
+      "alerts": [
+        "DATASET_DRIFT: 20/21 features drifted (share 0.95 >= 0.3)",
+        "PREDICTION_DRIFT: score 0.2451",
+        "TARGET_DRIFT: score 0.2408"
+      ],
+      "prediction_drift": {
+        "score": 0.245081,
+        "drifted": true
+      },
+      "target_drift": {
+        "score": 0.240817,
+        "drifted": true
+      }
+    }
+  },
+  "degradation_vs_baseline": {
+    "rmse": {
+      "delta": 10.5039,
+      "relative": 0.1679
+    },
+    "mae": {
+      "delta": 4.4517,
+      "relative": 0.1699
+    },
+    "r2": {
+      "delta": 0.1065
+    }
+  },
+  "baseline_decision": {
+    "rule": "retrain when dataset drift is detected AND performance breaches (quality gate failure or RMSE degradation over the limit)",
+    "threshold_breaches": {
+      "dataset_drift": {
+        "breached": true,
+        "observed_share": 0.9524,
+        "threshold_share": 0.3
+      },
+      "prediction_drift": {
+        "breached": true,
+        "observed_score": 0.106025,
+        "threshold": 0.1
+      },
+      "target_drift": {
+        "breached": true,
+        "observed_score": 0.107609,
+        "threshold": 0.1
+      },
+      "quality_gate": {
+        "breached": false,
+        "failures": [],
+        "thresholds": {
+          "max_mae": 35.0,
+          "max_rmse": 65.0,
+          "min_r2": 0.5,
+          "max_rmse_vs_baseline": 1.0
+        }
+      },
+      "rmse_degradation": {
+        "breached": false,
+        "observed_relative_change": 0.0,
+        "threshold_relative_change": 0.1
+      }
+    },
+    "retraining_triggered": false,
+    "trigger_reasons": []
+  },
+  "rule": "retrain when dataset drift is detected AND performance breaches (quality gate failure or RMSE degradation over the limit)",
+  "threshold_breaches": {
+    "dataset_drift": {
+      "breached": true,
+      "observed_share": 0.9524,
+      "threshold_share": 0.3
+    },
+    "prediction_drift": {
+      "breached": true,
+      "observed_score": 0.245081,
+      "threshold": 0.1
+    },
+    "target_drift": {
+      "breached": true,
+      "observed_score": 0.240817,
+      "threshold": 0.1
+    },
+    "quality_gate": {
+      "breached": true,
+      "failures": [
+        "RMSE 73.0592 > 65.0"
+      ],
+      "thresholds": {
+        "max_mae": 35.0,
+        "max_rmse": 65.0,
+        "min_r2": 0.5,
+        "max_rmse_vs_baseline": 1.0
+      }
+    },
+    "rmse_degradation": {
+      "breached": true,
+      "observed_relative_change": 0.1679,
+      "threshold_relative_change": 0.1
+    }
+  },
+  "retraining_triggered": true,
+  "trigger_reasons": [
+    "dataset drift: 20/21 features drifted (share 0.95 >= 0.3)",
+    "prediction drift: score 0.2451 >= 0.1",
+    "target drift: score 0.2408 >= 0.1",
+    "quality gate: RMSE 73.0592 > 65.0",
+    "RMSE up 16.8% vs baseline (limit 10%)"
+  ],
+  "artifacts": {
+    "drift_report_html": "reports/evidence/drift_report.html",
+    "drift_metrics_json": "reports/evidence/drift_metrics.json"
+  }
+}

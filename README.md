@@ -553,6 +553,27 @@ Outputs:
 
 The default test-split report flags drift (20 of 21 features), because the test window comes later in the season than the training data.
 
+### Deliberate drift experiment
+
+`scripts/run_drift_experiment.py` builds a controlled production scenario and records whether it should trigger retraining:
+
+- Summer heatwave: +8 °C on `T1`, `T2`, `T3`, `T6`, `T_out`.
+- Humidity sensor bias: -18% on `RH_1`, `RH_2`, `RH_3`, `RH_6`, `RH_out`.
+- Heavier evening bursts: appliance load ×1.5 + 50 Wh from 17:00 to 22:59.
+
+The shifts are applied to the raw series and features are rebuilt, so lags and ground truth stay consistent. The drifted batch has the same timestamps as the test split, so the unshifted test split is a like-for-like baseline. Retraining triggers only when dataset drift is detected **and** performance breaches: a release quality gate fails, or RMSE rises at least 10% over the baseline.
+
+```bash
+python scripts/run_drift_experiment.py            # --dry-run to print without writing
+```
+
+| Champion v5 | RMSE | MAE | R² | Drifted features | Retrain |
+|---|---|---|---|---|---|
+| Baseline (test split) | 62.56 | 26.21 | 0.526 | 20/21 (seasonal) | no |
+| Heatwave scenario | 73.06 | 30.66 | 0.633 | 20/21, mean score 2.25 vs 0.95 | **yes** |
+
+RMSE rises 16.8% and breaks the 65 Wh gate. R² goes up because the heavier evening load widens the target's variance; RMSE and MAE are the degradation measure here. The run writes `drift_report.html`, `drift_metrics.json` and `retraining_trigger_evidence.json` to `reports/evidence/`. A local compose stack mounts that folder, so Grafana and `EnergyModelDriftDetected` show this scenario until you regenerate `drift_metrics.json` (for example with the traffic replay below).
+
 ### Replay realistic traffic
 
 `scripts/simulate_traffic.py` posts real dataset rows to `/predict/batch` in chronological batches that mix standby and active-burst intervals (rows above the hurdle model's 100 Wh boundary). Each row carries the row's own timestamp and sensor readings plus the six actual readings before it, exactly as a client would send them. It writes what it sent to `data/monitoring/simulated_traffic.jsonl` in the inference-log format, so drift scores just this replay, not everything the API has served.
