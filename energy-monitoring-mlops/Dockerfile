@@ -34,7 +34,7 @@ ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     MODEL_LOCAL_PATH=/app/models/champion \
     DRIFT_METRICS_PATH=/app/reports/evidence/drift_metrics.json \
-    INFERENCE_LOG_PATH=/app/data/monitoring/inference_log.csv \
+    INFERENCE_LOG_PATH=/app/data/monitoring/inference_log.jsonl \
     MLFLOW_DISABLE_AGENT_HINT=1
 
 RUN groupadd --system --gid 10001 app \

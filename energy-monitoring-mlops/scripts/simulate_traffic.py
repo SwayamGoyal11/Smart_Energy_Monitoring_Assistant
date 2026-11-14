@@ -6,7 +6,7 @@ the Grafana dashboard and give the drift check a realistic traffic window.
 
     python scripts/simulate_traffic.py                        # 250 train-split rows
     python scripts/simulate_traffic.py --split test --rows 300
-    python -m src.monitoring.drift --current data/monitoring/simulated_traffic.csv
+    python -m src.monitoring.drift --current data/monitoring/simulated_traffic.jsonl
 
 Each request carries a row's own sensor readings and the six Appliances
 readings before it, exactly as a client would send them. The inputs and
@@ -38,7 +38,7 @@ from src.serving.schemas import HISTORY_LENGTH, PredictionRequest  # noqa: E402
 
 SPLITS = {"train": 0, "val": 1, "test": 2}
 SENSOR_FIELDS = [f for f in PredictionRequest.model_fields if f not in ("target_timestamp", "recent_appliances_wh")]
-DEFAULT_LOG = os.path.join(PROJECT_ROOT, "data", "monitoring", "simulated_traffic.csv")
+DEFAULT_LOG = os.path.join(PROJECT_ROOT, "data", "monitoring", "simulated_traffic.jsonl")
 # src.monitoring.drift skips windows smaller than this
 MIN_DRIFT_ROWS = 200
 
@@ -74,7 +74,7 @@ def main():
     parser.add_argument("--rows", type=int, default=250)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--delay", type=float, default=0.0, help="Seconds between requests.")
-    parser.add_argument("--log", default=DEFAULT_LOG, help="CSV of sent traffic for drift (overwritten).")
+    parser.add_argument("--log", default=DEFAULT_LOG, help="JSON Lines log of sent traffic for drift (overwritten).")
     args = parser.parse_args()
 
     requests = build_requests(args.split, args.rows, args.seed)

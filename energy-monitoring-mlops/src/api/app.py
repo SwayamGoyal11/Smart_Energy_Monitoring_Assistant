@@ -14,8 +14,8 @@ Configuration (environment variables):
     CORS_ORIGINS         comma-separated allowed origins (default: *)
     DRIFT_METRICS_PATH   drift_metrics.json exported as model_drift_* gauges
                          (default: reports/evidence/drift_metrics.json)
-    INFERENCE_LOG_PATH   CSV to append served features + predictions to, for
-                         drift monitoring (default: unset, logging disabled)
+    INFERENCE_LOG_PATH   JSON Lines file to append served features + predictions
+                         to, for drift monitoring (default: unset, logging disabled)
 """
 
 import logging
@@ -27,6 +27,8 @@ from typing import List, Optional
 
 import numpy as np
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
@@ -75,6 +77,11 @@ def _require_model(request: Request) -> LoadedModel:
     return loaded
 
 
+def _route_path(request: Request) -> str:
+    """Route template (not the raw URL) so metric label cardinality stays bounded."""
+    return getattr(request.scope.get("route"), "path", "unmatched")
+
+
 def _stage_model(loaded: Optional[LoadedModel]):
     """The underlying HurdleModel, if that is what is being served."""
     if loaded is None:
@@ -93,6 +100,7 @@ def _predict(request: Request, requests: List[PredictionRequest]) -> List[Predic
     try:
         X = validate_feature_frame(frame)
     except InputValidationError as exc:
+        state.metrics.observe_validation_failure(_route_path(request), "domain")
         raise HTTPException(status_code=422, detail=exc.issues)
 
     try:
@@ -176,12 +184,16 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         start = time.perf_counter()
         response = await call_next(request)
         elapsed = time.perf_counter() - start
-        # Label by route template, not raw URL, to keep label cardinality bounded.
-        route = request.scope.get("route")
-        path = getattr(route, "path", "unmatched")
-        request.app.state.metrics.observe_request(request.method, path, response.status_code, elapsed)
+        request.app.state.metrics.observe_request(
+            request.method, _route_path(request), response.status_code, elapsed,
+        )
         response.headers["X-Process-Time-Ms"] = f"{elapsed * 1000:.2f}"
         return response
+
+    @app.exception_handler(RequestValidationError)
+    async def count_schema_rejections(request: Request, exc: RequestValidationError):
+        request.app.state.metrics.observe_validation_failure(_route_path(request), "schema")
+        return await request_validation_exception_handler(request, exc)
 
     @app.get("/health", response_model=HealthResponse)
     def health(request: Request):

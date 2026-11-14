@@ -23,8 +23,10 @@ from src.models.registry import SKOPS_TRUSTED_TYPES
 from src.monitoring.drift import (
     MONITORED_FEATURES, DriftConfig, compute_drift, load_reference, save_reports,
 )
-from src.monitoring.inference_log import LOG_COLUMNS, PREDICTION_COL, InferenceLogger, load_inference_log
-from src.validation.input_validation import validate_feature_frame
+from src.monitoring.inference_log import (
+    EVENT_TYPE, LOG_COLUMNS, PREDICTION_COL, InferenceLogger, load_inference_log,
+)
+from src.validation.input_validation import InputValidationError, validate_feature_frame
 
 TEMPERATURES = ["T1", "T2", "T3", "T6", "T_out", "Tdewpoint"]
 HUMIDITIES = ["RH_1", "RH_2", "RH_3", "RH_6", "RH_out"]
@@ -199,7 +201,7 @@ class TestInferenceLog:
         return synthetic(n, seed=12).reindex(columns=LOG_COLUMNS[3:-1], fill_value=0.0)
 
     def test_round_trip(self, tmp_path):
-        path = str(tmp_path / "log" / "inference.csv")
+        path = str(tmp_path / "log" / "inference.jsonl")
         logger = InferenceLogger(path)
         stamps = pd.date_range("2016-05-20", periods=3, freq="10min")
         logger.log(self._features(3), [50.0, 60.0, 70.0], stamps, "1")
@@ -209,7 +211,7 @@ class TestInferenceLog:
         assert frame[PREDICTION_COL].tolist() == [50.0, 60.0, 70.0, 80.0, 90.0]
 
     def test_concurrent_writes(self, tmp_path):
-        path = str(tmp_path / "inference.csv")
+        path = str(tmp_path / "inference.jsonl")
         logger = InferenceLogger(path)
         stamps = pd.date_range("2016-05-20", periods=5, freq="10min")
         threads = [
@@ -221,6 +223,47 @@ class TestInferenceLog:
         for t in threads:
             t.join()
         assert len(load_inference_log(path)) == 40
+
+    def test_lines_are_structured_json(self, tmp_path):
+        path = tmp_path / "inference.jsonl"
+        stamps = pd.date_range("2016-05-20", periods=2, freq="10min")
+        InferenceLogger(str(path)).log(self._features(2), np.array([50.5, 61.0]), stamps, 7)
+        lines = path.read_text(encoding="utf-8").splitlines()
+        assert len(lines) == 2
+        for line, pred, stamp in zip(lines, [50.5, 61.0], stamps):
+            record = json.loads(line)
+            assert record["event"] == EVENT_TYPE
+            assert set(LOG_COLUMNS) <= set(record)
+            assert record[PREDICTION_COL] == pred
+            assert record["model_version"] == "7"
+            assert record["target_timestamp"] == stamp.isoformat()
+            assert pd.Timestamp(record["logged_at"]).tzinfo is not None
+            assert all(isinstance(record[c], (int, float)) for c in LOG_COLUMNS[3:])
+
+    def test_length_mismatch_rejected(self, tmp_path):
+        logger = InferenceLogger(str(tmp_path / "inference.jsonl"))
+        with pytest.raises(ValueError):
+            logger.log(self._features(2), [1.0], ["2016-05-20T00:00:00"] * 2, "1")
+
+    def test_malformed_line_raises(self, tmp_path):
+        path = tmp_path / "inference.jsonl"
+        InferenceLogger(str(path)).log(self._features(1), [1.0], ["2016-05-20T00:00:00"], "1")
+        with open(path, "a", encoding="utf-8") as f:
+            f.write("{truncated\n")
+        with pytest.raises(ValueError, match="line 2"):
+            load_inference_log(str(path))
+
+    def test_legacy_csv_log_still_loads(self, tmp_path):
+        path = tmp_path / "legacy.csv"
+        frame = self._features(3)
+        frame.insert(0, "model_version", "1")
+        frame.insert(0, "target_timestamp", pd.date_range("2016-05-20", periods=3, freq="10min"))
+        frame.insert(0, "logged_at", "2026-01-01T00:00:00+00:00")
+        frame[PREDICTION_COL] = [1.0, 2.0, 3.0]
+        frame[LOG_COLUMNS].to_csv(path, index=False)
+        loaded = load_inference_log(str(path))
+        assert list(loaded.columns) == LOG_COLUMNS
+        assert loaded[PREDICTION_COL].tolist() == [1.0, 2.0, 3.0]
 
     def test_missing_log_raises(self, tmp_path):
         with pytest.raises(FileNotFoundError):
@@ -256,7 +299,7 @@ def monitored_app(hurdle_model_dir, tmp_path):
         tracking_uri=f"sqlite:///{(tmp_path / 'absent.db').as_posix()}",
         local_model_path=hurdle_model_dir,
         drift_metrics_path=str(tmp_path / "drift_metrics.json"),
-        inference_log_path=str(tmp_path / "inference.csv"),
+        inference_log_path=str(tmp_path / "inference.jsonl"),
     )
     with TestClient(create_app(settings)) as client:
         yield client, settings
@@ -288,6 +331,7 @@ class TestMetricsEndpoint:
         assert families["model_prediction_value"] == "histogram"
         assert families["model_active_stage_ratio"] == "gauge"
         assert families["model_drift_score"] == "gauge"
+        assert families["model_input_validation_failures"] == "counter"
 
     def test_request_counter_and_latency(self, monitored_app):
         client, _ = monitored_app
@@ -300,6 +344,35 @@ class TestMetricsEndpoint:
         assert value(s, "http_requests_total", method="POST", path="/predict", status="422") == 1
         assert value(s, "http_requests_total", method="GET", path="unmatched", status="404") == 1
         assert value(s, "http_request_duration_seconds_count", method="POST", path="/predict") == 4
+
+    def test_input_validation_counter(self, monitored_app):
+        client, _ = monitored_app
+        assert client.post("/predict", json={**IDLE, "RH_1": 150.0}).status_code == 422  # out of bounds
+        assert client.post("/predict", json={**IDLE, "T1": "warm"}).status_code == 422  # wrong type
+        assert client.post("/predict/batch", json={"instances": []}).status_code == 422  # empty batch
+        assert client.post("/predict", json=IDLE).status_code == 200
+        s = scrape(client)
+        assert value(s, "model_input_validation_failures_total", path="/predict", stage="schema") == 2
+        assert value(s, "model_input_validation_failures_total", path="/predict/batch", stage="schema") == 1
+        assert value(s, "model_input_validation_failures_total", path="/predict", stage="domain") is None
+        # Rejected requests never reach the model or the inference log.
+        assert value(s, "model_prediction_value_count", model_version="local") == 1
+
+    def test_domain_validation_counter(self, monitored_app, monkeypatch):
+        # The request schema mirrors PHYSICAL_BOUNDS, so the feature-frame validator is
+        # defense in depth; force it to reject to check that its rejections are counted.
+        import src.api.app as app_module
+
+        def reject(frame):
+            raise InputValidationError(["is_weekend inconsistent with day_of_week in 1 row(s)"])
+
+        client, settings = monitored_app
+        monkeypatch.setattr(app_module, "validate_feature_frame", reject)
+        r = client.post("/predict", json=IDLE)
+        assert r.status_code == 422 and "is_weekend" in r.json()["detail"][0]
+        s = scrape(client)
+        assert value(s, "model_input_validation_failures_total", path="/predict", stage="domain") == 1
+        assert not os.path.exists(settings.inference_log_path)
 
     def test_prediction_histogram(self, monitored_app):
         client, _ = monitored_app
@@ -364,6 +437,8 @@ class TestMetricsEndpoint:
         assert log[PREDICTION_COL].tolist() == pytest.approx(served, abs=1e-3)
         assert log["model_version"].astype(str).tolist() == ["local", "local"]
         assert set(MONITORED_FEATURES) <= set(log.columns)
+        with open(settings.inference_log_path, encoding="utf-8") as f:
+            assert all(json.loads(line)["event"] == EVENT_TYPE for line in f)
 
     def test_registries_isolated_between_apps(self, hurdle_model_dir, tmp_path):
         settings = Settings(tracking_uri=f"sqlite:///{(tmp_path / 'x.db').as_posix()}",

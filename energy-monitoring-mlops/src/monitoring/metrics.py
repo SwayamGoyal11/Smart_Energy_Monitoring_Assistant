@@ -51,6 +51,12 @@ class ApiMetrics:
             "Share of hurdle-model predictions routed to the active-burst regressor.",
             registry=self.registry,
         )
+        self.validation_failures = Counter(
+            "model_input_validation_failures_total",
+            "Rejected prediction requests by route and validation stage "
+            "(schema: request body or field bounds; domain: derived feature-frame contract).",
+            ["path", "stage"], registry=self.registry,
+        )
         self.drift_score = Gauge(
             "model_drift_score", "Latest Evidently drift score per monitored column.",
             ["column"], registry=self.registry,
@@ -67,6 +73,9 @@ class ApiMetrics:
     def observe_request(self, method: str, path: str, status: int, seconds: float) -> None:
         self.requests.labels(method, path, str(status)).inc()
         self.latency.labels(method, path).observe(seconds)
+
+    def observe_validation_failure(self, path: str, stage: str) -> None:
+        self.validation_failures.labels(path, stage).inc()
 
     def observe_predictions(self, values, model_version: str) -> None:
         hist = self.prediction_value.labels(model_version)

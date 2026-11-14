@@ -206,7 +206,7 @@
         "x": 0,
         "y": 5,
         "w": 4,
-        "h": 4
+        "h": 2
       },
       "targets": [
         {
@@ -251,6 +251,63 @@
             "lastNotNull"
           ]
         }
+      }
+    },
+    {
+      "id": 14,
+      "title": "Validation rejections (5m)",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 7,
+        "w": 4,
+        "h": 2
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(model_input_validation_failures_total{job=\"energy-api\"}[5m])) or vector(0)",
+          "legendFormat": "rejected",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none"
       }
     },
     {

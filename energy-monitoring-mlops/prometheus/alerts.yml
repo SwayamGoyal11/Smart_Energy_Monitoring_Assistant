@@ -33,6 +33,17 @@ groups:
         annotations:
           summary: p95 /predict latency is above 250 ms.
 
+      - alert: EnergyApiInputValidationFailures
+        expr: |
+          sum(rate(model_input_validation_failures_total{job="energy-api"}[10m]))
+            / clamp_min(sum(rate(http_requests_total{job="energy-api", path=~"/predict.*"}[10m])), 1e-9) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 10% of prediction requests are rejected by input validation.
+          description: Check model_input_validation_failures_total by stage; domain rejections often mean upstream sensor faults.
+
       - alert: EnergyModelDriftDetected
         expr: model_drift_detected{job="energy-api"} == 1
         for: 5m

@@ -23,7 +23,7 @@ services:
     environment:
       MODEL_LOCAL_PATH: /app/models/champion
       DRIFT_METRICS_PATH: /app/reports/evidence/drift_metrics.json
-      INFERENCE_LOG_PATH: /app/data/monitoring/inference_log.csv
+      INFERENCE_LOG_PATH: /app/data/monitoring/inference_log.jsonl
       CORS_ORIGINS: ${CORS_ORIGINS:-*}
     volumes:
       # Exported champion (scripts/export_champion.py); swap without rebuilding.

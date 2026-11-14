@@ -52,12 +52,14 @@ private, `docker login ghcr.io` first with a token that has `read:packages`.
 ## Drift on served traffic
 
 The API appends every served input and prediction to `INFERENCE_LOG_PATH`
-(the `inference-logs` volume). Score it against the training distribution:
+(the `inference-logs` volume) as structured JSON Lines, one object per
+predicted row with `event`, `logged_at`, `target_timestamp`, `model_version`,
+the model features and `prediction`. Score it against the training distribution:
 
 ```bash
 mkdir -p data/monitoring
-docker cp energy-api:/app/data/monitoring/inference_log.csv data/monitoring/inference_log.csv
-python -m src.monitoring.drift --current data/monitoring/inference_log.csv
+docker cp energy-api:/app/data/monitoring/inference_log.jsonl data/monitoring/inference_log.jsonl
+python -m src.monitoring.drift --current data/monitoring/inference_log.jsonl
 ```
 
 This rewrites `reports/evidence/drift_report.html` and `drift_metrics.json`; the

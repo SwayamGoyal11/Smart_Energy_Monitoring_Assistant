@@ -969,7 +969,7 @@ def log_monitoring_baseline(model, X_ref: pd.DataFrame, y_ref, source_split: str
                 "reason": "calendar features drift by construction (serving is always later in time)",
             },
             "reference": {"artifact": "monitoring/reference_stats.json", "split": source_split},
-            "run_command": "python -m src.monitoring.drift --current data/monitoring/inference_log.csv",
+            "run_command": "python -m src.monitoring.drift --current data/monitoring/inference_log.jsonl",
         },
         "monitoring/drift_config.json",
     )

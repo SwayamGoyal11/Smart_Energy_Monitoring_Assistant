@@ -91,7 +91,16 @@ The same gates run in CI on every push and pull request (`.github/workflows/ci.y
 
 ---
 
-## 6. Production Recommendations (Phase 2 & 3)
+## 6. Monitoring and Governance (Phase 3)
+- **Metrics (`GET /metrics`, `src/monitoring/metrics.py`):** request count (`http_requests_total`) and latency (`http_request_duration_seconds`) by route and status; prediction distribution (`model_prediction_value`); hurdle routing (`model_stage_predictions_total`, `model_active_stage_ratio`); rejected inputs (`model_input_validation_failures_total`, `stage` = `schema` for malformed or out-of-range requests, `domain` for derived feature frames that break the input contract); and the latest Evidently drift result (`model_drift_score`, `model_drift_share`, `model_drift_detected`).
+- **Inference log (`src/monitoring/inference_log.py`):** every served prediction is appended to `INFERENCE_LOG_PATH` as one structured JSON Lines record with the model version, target timestamp, all model features and the prediction. Rejected requests are not logged.
+- **Drift (`src/monitoring/drift.py`):** the inference log (or the held-out test split) is compared against the training split with normed Wasserstein distance (alert at 0.1); calendar features are excluded. Outputs go to `reports/evidence/drift_report.html` and `drift_metrics.json`, which the API exports as gauges.
+- **Alerting (`prometheus/alerts.yml`):** API down, 5xx ratio > 5%, `/predict` p95 > 250 ms, input-validation rejections > 10%, drift detected, and active-stage ratio > 50%. The provisioned Grafana dashboard visualizes the same signals.
+- **Retraining trigger:** a sustained `EnergyModelDriftDetected` alert or a rising domain-rejection rate calls for a fresh drift report on served traffic and, if confirmed, retraining through the gated registry flow in section 5.
+
+---
+
+## 7. Production Recommendations (Phase 2 & 3)
 1. **Hurdle tuning:** Calibrate the Stage 1 probability and tune the burst regressor; test RMSE still trails Linear Regression.
 2. **Asymmetric Loss Calibration:** Train on Huber loss or asymmetric quantile loss rather than default MSE to prevent excessive smoothing of rare, high-draw spikes.
 3. **Longer-horizon lags:** Add lag terms such as $y_{t-6}$ to capture hourly inertia.

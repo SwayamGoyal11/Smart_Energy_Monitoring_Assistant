@@ -487,15 +487,18 @@ Out-of-range sensor values, non-finite numbers, unknown fields, missing fields a
 | `http_request_duration_seconds` | Latency histogram by method and route |
 | `model_prediction_value` | Distribution of predicted Wh |
 | `model_stage_predictions_total`, `model_active_stage_ratio` | Hurdle routing: standby vs. active-burst decisions |
+| `model_input_validation_failures_total` | Rejected requests by route and stage (`schema`: malformed body or out-of-range field; `domain`: derived feature frame breaks the model input contract) |
 | `model_drift_score`, `model_drift_share`, `model_drift_detected` | Latest Evidently report, per column and overall |
 
-Grafana provisions the **Energy Forecaster - Serving & Drift** dashboard automatically: service health, `/predict` latency p50/p95/p99, 5xx ratio, prediction quantiles, hurdle active-stage ratio and per-column drift scores. Prometheus evaluates `prometheus/alerts.yml`: API down, 5xx ratio > 5%, `/predict` p95 > 250 ms, drift detected, and active-stage ratio > 50% for 30 minutes (training baseline ~22%).
+Grafana provisions the **Energy Forecaster - Serving & Drift** dashboard automatically: service health, `/predict` latency p50/p95/p99, 5xx ratio, prediction quantiles, hurdle active-stage ratio and per-column drift scores. Prometheus evaluates `prometheus/alerts.yml`: API down, 5xx ratio > 5%, `/predict` p95 > 250 ms, drift detected, input-validation rejections above 10% of `/predict` traffic, and active-stage ratio > 50% for 30 minutes (training baseline ~22%).
+
+Every served prediction is also appended to `INFERENCE_LOG_PATH` as structured JSON Lines, one object per predicted row: `{"event": "inference", "logged_at", "target_timestamp", "model_version", <model features...>, "prediction"}`. The drift command reads this file directly (older CSV logs still load).
 
 ### Traffic warmup
 
 A fresh stack has served no predictions, so most panels show "No data". Right after `docker compose up`, run these two steps (**PowerShell or bash**, with the environment activated):
 
-**Step 1: replay realistic data through the API.** This sends 250 real dataset rows to `/predict` and saves what it sent to `data/monitoring/simulated_traffic.csv`.
+**Step 1: replay realistic data through the API.** This sends 250 real dataset rows to `/predict` and saves what it sent to `data/monitoring/simulated_traffic.jsonl`.
 
 ```bash
 python scripts/simulate_traffic.py
@@ -504,7 +507,7 @@ python scripts/simulate_traffic.py
 **Step 2: compute and publish Evidently drift metrics for that traffic.**
 
 ```bash
-python -m src.monitoring.drift --current data/monitoring/simulated_traffic.csv
+python -m src.monitoring.drift --current data/monitoring/simulated_traffic.jsonl
 ```
 
 Step 2 needs `--current`. Without it, the drift command scores the held-out test split instead of the replayed traffic, and that report flags drift (20 of 21 features, see [Drift reports](#drift-reports-evidently)). The API reads the new `drift_metrics.json` on its next scrape, so the drift panels show the replay's result: no drift alerts for the default train-split replay.
@@ -529,16 +532,16 @@ To score real traffic, copy the API's inference log out of the compose volume fi
 
 ```powershell
 New-Item -ItemType Directory -Force data\monitoring | Out-Null
-docker cp energy-api:/app/data/monitoring/inference_log.csv data\monitoring\inference_log.csv
-python -m src.monitoring.drift --current data/monitoring/inference_log.csv
+docker cp energy-api:/app/data/monitoring/inference_log.jsonl data\monitoring\inference_log.jsonl
+python -m src.monitoring.drift --current data/monitoring/inference_log.jsonl
 ```
 
 **bash**
 
 ```bash
 mkdir -p data/monitoring
-docker cp energy-api:/app/data/monitoring/inference_log.csv data/monitoring/inference_log.csv
-python -m src.monitoring.drift --current data/monitoring/inference_log.csv
+docker cp energy-api:/app/data/monitoring/inference_log.jsonl data/monitoring/inference_log.jsonl
+python -m src.monitoring.drift --current data/monitoring/inference_log.jsonl
 ```
 
 Options: `--method wasserstein|ks`, `--threshold <float>`, and `--fail-on-drift`, which exits with code 2 when any alert fires.
@@ -552,13 +555,13 @@ The default test-split report flags drift (20 of 21 features), because the test 
 
 ### Replay realistic traffic
 
-`scripts/simulate_traffic.py` posts real dataset rows to `/predict`. Each request carries the row's own timestamp and sensor readings plus the six actual readings before it, exactly as a client would send them. It writes what it sent to `data/monitoring/simulated_traffic.csv` in the inference-log format, so drift scores just this replay, not everything the API has served.
+`scripts/simulate_traffic.py` posts real dataset rows to `/predict`. Each request carries the row's own timestamp and sensor readings plus the six actual readings before it, exactly as a client would send them. It writes what it sent to `data/monitoring/simulated_traffic.jsonl` in the inference-log format, so drift scores just this replay, not everything the API has served.
 
 **PowerShell or bash** (with the stack running):
 
 ```bash
 python scripts/simulate_traffic.py
-python -m src.monitoring.drift --current data/monitoring/simulated_traffic.csv
+python -m src.monitoring.drift --current data/monitoring/simulated_traffic.jsonl
 ```
 
 Defaults are 250 rows (drift needs at least 200) sampled from the train split. Options: `--split train|val|test`, `--rows <n>`, `--seed <n>`, `--delay <seconds>` and `--url <base url>`. The script also prints the MAE against the actual readings.

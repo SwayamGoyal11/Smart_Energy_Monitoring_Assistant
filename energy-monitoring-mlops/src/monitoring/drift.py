@@ -6,7 +6,7 @@ predictions against the training-period reference distribution.
 
 Run from the project root:
     python -m src.monitoring.drift                          # current = test split
-    python -m src.monitoring.drift --current data/monitoring/inference_log.csv
+    python -m src.monitoring.drift --current data/monitoring/inference_log.jsonl
 
 Outputs:
     reports/evidence/drift_report.html   Evidently report for humans
@@ -214,7 +214,7 @@ def main(argv=None) -> int:
     from src.models.registry import REGISTERED_MODEL, tracking_uri
 
     parser = argparse.ArgumentParser(description="Generate Evidently drift reports.")
-    parser.add_argument("--current", help="Inference log CSV; defaults to the held-out test split.")
+    parser.add_argument("--current", help="Inference log (JSON Lines, or legacy CSV); defaults to the held-out test split.")
     parser.add_argument("--method", choices=sorted(METHODS), default=DriftConfig.method)
     parser.add_argument("--threshold", type=float, default=None)
     parser.add_argument("--fail-on-drift", action="store_true", help="Exit 2 when any alert fires.")
