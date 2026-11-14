@@ -17,6 +17,34 @@ Seven empty commits were added to the Git history as progress checkpoints for th
 
 ---
 
+## Phase 1-3 deliverables and evidence matrix
+
+Release **v1.2.0**. Every artifact is linked from here; paths are relative to the repository root.
+
+| # | Deliverable | Implementation | Evidence | Verify |
+|---|---|---|---|---|
+| 1 | DVC dataset versioning | [`.dvc` pointer](energy-monitoring-mlops/data/raw/energydata_complete.csv.dvc), [`.dvc/config`](energy-monitoring-mlops/.dvc/config), [`fetch-dataset` action](.github/actions/fetch-dataset/action.yml) | [`dataset_validation.json`](energy-monitoring-mlops/reports/evidence/dataset_validation.json) | `dvc pull`, or CI's MD5 check against the pointer |
+| 2 | EDA and leak-free features | [`01_eda.ipynb`](energy-monitoring-mlops/notebooks/01_eda.ipynb), [`feature_engineering.py`](energy-monitoring-mlops/src/features/feature_engineering.py) | [Model card §2-3](energy-monitoring-mlops/docs/model_card.md#2-data) | `pytest tests/test_data.py` |
+| 3 | Baselines and benchmarks | [`run_pipeline.py`](energy-monitoring-mlops/run_pipeline.py), [`hurdle.py`](energy-monitoring-mlops/src/models/hurdle.py) | [`model_comparison.csv`](energy-monitoring-mlops/reports/evidence/model_comparison.csv) (Phase 1 baselines), [model card §4](energy-monitoring-mlops/docs/model_card.md#4-quantitative-evaluation) | `python run_pipeline.py` |
+| 4 | MLflow tracking and quality-gated registry | [`registry.py`](energy-monitoring-mlops/src/models/registry.py), [`quality_gates.py`](energy-monitoring-mlops/src/models/quality_gates.py), [`run_registry.py`](energy-monitoring-mlops/run_registry.py) | Registry audit (23 versions, `@champion` v5) in [`retraining_lifecycle.md`](energy-monitoring-mlops/reports/evidence/retraining_lifecycle.md#3-live-registry-audit); [`serving_metadata.json`](energy-monitoring-mlops/models/champion/serving_metadata.json) | `python -m mlflow ui --backend-store-uri sqlite:///mlflow.db` (local store, not committed) |
+| 5 | ZenML pipeline runs | [`zenml_pipeline.py`](energy-monitoring-mlops/pipelines/zenml_pipeline.py), [`run_zenml.py`](energy-monitoring-mlops/run_zenml.py) | [ZenML wrapper guide](energy-monitoring-mlops/docs/zenml_wrapper.md) | [Running the ZenML pipeline](#running-the-zenml-pipeline-windows-powershell) |
+| 6 | Automated test suite | [`tests/`](energy-monitoring-mlops/tests/) (289 tests: data, features, hurdle, validation, registry, API, monitoring, drift experiment, retraining flow, deployment config) | CI "PyTest suite" job | `python -m pytest` |
+| 7 | Docker image and Compose stack | [`Dockerfile`](energy-monitoring-mlops/Dockerfile), [`docker-compose.yml`](energy-monitoring-mlops/docker-compose.yml), [`.dockerignore`](energy-monitoring-mlops/.dockerignore) | [Deployment runbook](energy-monitoring-mlops/docs/deployment.md), `tests/test_deployment.py` | `docker compose up --build -d` |
+| 8 | GitHub Actions CI/CD to GHCR | [`ci.yml`](.github/workflows/ci.yml), [`cd.yml`](.github/workflows/cd.yml) | [Actions runs](https://github.com/SwayamGoyal11/Smart_Energy_Monitoring_Assistant/actions); image `ghcr.io/swayamgoyal11/energy-forecaster-api` | badges above; [CI/CD](#cicd) |
+| 9 | Live API deployment | FastAPI [`app.py`](energy-monitoring-mlops/src/api/app.py); self-contained image with the baked champion bundle [`models/champion/`](energy-monitoring-mlops/models/champion/) | Render service, configured in the Render dashboard; no Render config file or service URL is committed ([runbook](energy-monitoring-mlops/docs/deployment.md#hosted-deployment-render)) | `GET /health` reports `model_version: "5"`; `python scripts/simulate_traffic.py --url <service url>` |
+| 10 | Prometheus and Grafana observability | [`metrics.py`](energy-monitoring-mlops/src/monitoring/metrics.py), [`prometheus.yml`](energy-monitoring-mlops/prometheus/prometheus.yml), [`alerts.yml`](energy-monitoring-mlops/prometheus/alerts.yml), [dashboard JSON](energy-monitoring-mlops/grafana/provisioning/dashboards/json/energy-forecaster.json) | [Metrics and dashboard](#metrics-and-dashboard) | http://localhost:9090, http://localhost:3000 after `docker compose up` |
+| 11 | Structured logging and traffic simulation | [`inference_log.py`](energy-monitoring-mlops/src/monitoring/inference_log.py) (JSON Lines), [`simulate_traffic.py`](energy-monitoring-mlops/scripts/simulate_traffic.py) | `tests/test_monitoring.py` | [Replay realistic traffic](#replay-realistic-traffic) |
+| 12 | Deliberate drift experiment and Evidently reports | [`run_drift_experiment.py`](energy-monitoring-mlops/scripts/run_drift_experiment.py), [`drift.py`](energy-monitoring-mlops/src/monitoring/drift.py) | [`drift_report.html`](energy-monitoring-mlops/reports/evidence/drift_report.html), [`drift_metrics.json`](energy-monitoring-mlops/reports/evidence/drift_metrics.json), [`retraining_trigger_evidence.json`](energy-monitoring-mlops/reports/evidence/retraining_trigger_evidence.json) | `python scripts/run_drift_experiment.py` |
+| 13 | Retraining lifecycle and champion promotion | [`verify_retraining_flow.py`](energy-monitoring-mlops/scripts/verify_retraining_flow.py), [`export_champion.py`](energy-monitoring-mlops/scripts/export_champion.py) | [`retraining_lifecycle.md`](energy-monitoring-mlops/reports/evidence/retraining_lifecycle.md) (25/25 checks) | `python scripts/verify_retraining_flow.py` |
+| 14 | Model card, governance and limitations | [`model_card.md`](energy-monitoring-mlops/docs/model_card.md) | intended use, guardrails, evaluation, retraining rule, rollback, limitations | n/a |
+
+**Key results.**
+- **Champion:** two-stage hurdle v5. Validation RMSE 59.66 / MAE 24.63 / R² 0.582; test RMSE 62.56 / MAE 26.21 / R² 0.526.
+- **Persistence baseline:** test RMSE 66.85.
+- **Heatwave drift experiment:** RMSE rises to 73.06 Wh (+16.8%) and breaks the 65 Wh gate, so retraining triggers. The unshifted baseline does not trigger it.
+
+---
+
 ## Architecture
 
 ```mermaid
@@ -62,7 +90,7 @@ flowchart LR
 
 ## Production champion: two-stage hurdle model
 
-The serving model is **`energy-forecaster` version 5** (aliases `@champion` and `@staging`), a two-stage hurdle model (`src/models/hurdle.py`) built for the target's heavy standby skew: the median interval is 60 Wh and about 79% of intervals sit at or below 100 Wh, with short bursts up to ~1,080 Wh.
+The serving model is **`energy-forecaster` version 5** (alias `@champion`; `@staging` points at the latest gated candidate, currently v23), a two-stage hurdle model (`src/models/hurdle.py`) built for the target's heavy standby skew: the median interval is 60 Wh and about 79% of intervals sit at or below 100 Wh, with short bursts up to ~1,080 Wh.
 
 1. **Stage 1, regime classifier:** standardized logistic regression predicts whether the interval is an active burst (`Appliances > 100 Wh`, ~22% of training intervals).
 2. **Stage 2, load-intensity regressor:** a HistGradientBoosting regressor trained on active intervals only.
@@ -113,7 +141,7 @@ Runs on every push to `main`, every `v*.*.*` tag push, and every pull request.
 | Job | What it checks |
 |---|---|
 | Lint & code quality | `ruff check` with the rules in `ruff.toml` (pyflakes + syntax/statement errors) |
-| PyTest suite | All 243 tests (data, features, hurdle, input validation, model quality, registry, API, monitoring, deployment config), with coverage |
+| PyTest suite | All 289 tests (data, features, hurdle, input validation, model quality, registry, API, monitoring, drift experiment, retraining flow, deployment config), with coverage |
 | Docker build verification | Builds the image with the `type=gha` layer cache, imports the app inside it, asserts it runs as uid 10001 |
 | Quality gate check | Runs `run_registry.py` against a throwaway MLflow store; fails if no candidate passes the gates |
 
@@ -244,7 +272,7 @@ python -m pytest tests -q
 python -m ruff check .
 ```
 
-`pytest` runs 243 tests in about 3 minutes; `ruff` applies the same lint gate as CI. Tests that touch the registry or API build throwaway MLflow stores under pytest's `tmp_path` and never read or write the project's `mlflow.db`.
+`pytest` runs 289 tests in about 3 minutes; `ruff` applies the same lint gate as CI. Tests that touch the registry or API build throwaway MLflow stores under pytest's `tmp_path` and never read or write the project's `mlflow.db`.
 
 ---
 
@@ -641,8 +669,9 @@ energy-monitoring-mlops/
 
 ## Documentation
 
-- [Model card](energy-monitoring-mlops/docs/model_card.md): split protocol, benchmarks, hurdle design, failure modes, release gates.
-- [Deployment runbook](energy-monitoring-mlops/docs/deployment.md): image design, compose stack, alerts.
+- [Model card](energy-monitoring-mlops/docs/model_card.md): intended and out-of-scope use, features and input guardrails, evaluation, release gates, monitoring and retraining governance, rollback, limitations.
+- [Deployment runbook](energy-monitoring-mlops/docs/deployment.md): compose stack, GHCR CI/CD, hosted (Render) requirements, image design, alerts.
+- [Retraining lifecycle evidence](energy-monitoring-mlops/reports/evidence/retraining_lifecycle.md): drift trigger, registry audit, promotion-policy replay, champion bundle verification.
 - [ZenML Hurdle wrapper](energy-monitoring-mlops/docs/zenml_wrapper.md): four-step pipeline, Windows/uv setup, MLflow linking, and verified Docker dashboard commands.
 - [Earlier ZenML pipeline](energy-monitoring-mlops/docs/zenml.md): original orchestration setup.
 
@@ -661,7 +690,7 @@ energy-monitoring-mlops/
 
 ### Phase 2: Productionization and deployment (complete)
 
-- [x] PyTest suite: 243 tests across data, model quality, registry, API, monitoring and deployment config
+- [x] PyTest suite (243 tests at the end of Phase 2; 289 after Phase 3)
 - [x] Model-risk quality gates against fixed thresholds and the persistence baseline
 - [x] Two-stage hurdle model promoted as champion (`energy-forecaster` v5)
 - [x] MLflow Model Registry with `staging` / `champion` aliases
@@ -670,3 +699,12 @@ energy-monitoring-mlops/
 - [x] Evidently drift detection wired into the metrics endpoint
 - [x] Multi-stage, non-root Docker image and Compose monitoring stack
 - [x] GitHub Actions CI (lint, tests, image build, quality gates) and CD to GHCR
+
+### Phase 3: Monitoring, drift and governance (complete, v1.2.0)
+
+- [x] Structured JSON Lines inference logging and an input-validation rejection counter on `/metrics`
+- [x] Prometheus alerts and a Grafana panel for input-validation failures; config/metric alignment tests
+- [x] Traffic simulator with mixed standby/burst batches, invalid payloads and remote-URL support
+- [x] Deliberate heatwave drift experiment with Evidently reports and recorded retraining trigger evidence
+- [x] Retraining lifecycle verification: registry audit, promotion-policy replay, champion bundle checks
+- [x] Model card finalized as a governance and limitations report

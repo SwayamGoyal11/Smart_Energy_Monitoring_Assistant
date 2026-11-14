@@ -1,6 +1,6 @@
 # Retraining Lifecycle and Champion Promotion Evidence
 
-Generated 2026-11-14 02:50 UTC by `python scripts/verify_retraining_flow.py`. **25/25 checks passed.**
+Generated 2026-11-14 03:02 UTC by `python scripts/verify_retraining_flow.py`. **25/25 checks passed.**
 
 ```text
 drift trigger -> retrain candidates -> quality gates (val + test) -> @staging
@@ -47,7 +47,7 @@ Retraining runs `python run_registry.py` (or the ZenML pipeline), which fits can
 
 ## 3. Live registry audit
 
-`energy-forecaster` in the project MLflow registry: 23 versions, `@champion` = v5, `@staging` = v23. 20 later candidates passed the gates but did not beat the champion's validation RMSE, so they were held at or below `@staging`.
+`energy-forecaster` in the project MLflow registry: 23 versions, `@champion` = v5, `@staging` = v23. 21 other versions passed the gates but have a validation RMSE no better than the champion's (including its own re-logs and the current `@staging`), so none of them could take `@champion`.
 
 | Version | Model | Gate | Val RMSE | Test RMSE | Aliases | Note |
 |---|---|---|---|---|---|---|
@@ -83,7 +83,7 @@ Versions 4 and 5 re-log the fitted v1 model to refresh its recorded dependencies
 | @staging assigned | PASS | v23 |
 | Every alias holder passed the quality gates | PASS | v5=passed, v23=passed |
 | No failed candidate holds an alias | PASS | 1 failed version(s): v3 |
-| No gated version beats @champion on validation RMSE | PASS | @champion v5 val RMSE 59.6618; 20 later gated candidates held back |
+| No gated version beats @champion on validation RMSE | PASS | @champion v5 val RMSE 59.6618; 21 other gated versions are no better |
 
 ## 4. Promotion policy replay (sandbox registry)
 

@@ -192,12 +192,12 @@ def audit_registry(uri: str, model_name: str = REGISTERED_MODEL) -> Section:
             f"{len(failed)} failed version(s): " + ", ".join(f"v{v['version']}" for v in failed))
     better = [v for v in versions if v["quality_gate"] == "passed" and v["val_rmse"] is not None
               and v["val_rmse"] < champ["val_rmse"] - 1e-9]
-    passed_not_promoted = [v for v in versions if v["quality_gate"] == "passed" and not v["aliases"]
-                           and v["val_rmse"] is not None and v["val_rmse"] >= champ["val_rmse"]]
+    held_back = [v for v in versions if v["quality_gate"] == "passed" and v["version"] != champ["version"]
+                 and v["val_rmse"] is not None and v["val_rmse"] >= champ["val_rmse"]]
     s.check("No gated version beats @champion on validation RMSE", not better,
             f"@champion v{champ['version']} val RMSE {champ['val_rmse']:.4f}; "
-            f"{len(passed_not_promoted)} later gated candidates held back")
-    s.data["held_back"] = len(passed_not_promoted)
+            f"{len(held_back)} other gated versions are no better")
+    s.data["held_back"] = len(held_back)
     return s
 
 
@@ -465,8 +465,9 @@ def render_report(trigger: Section, registry: Section, sandbox: Optional[Section
             "",
             f"`{REGISTERED_MODEL}` in the project MLflow registry: {len(registry.data.get('versions', []))} versions, "
             f"`@{CHAMPION_ALIAS}` = v{a.get(CHAMPION_ALIAS)}, `@{STAGING_ALIAS}` = v{a.get(STAGING_ALIAS)}. "
-            f"{registry.data.get('held_back', 0)} later candidates passed the gates but did not beat the champion's "
-            "validation RMSE, so they were held at or below `@staging`.",
+            f"{registry.data.get('held_back', 0)} other versions passed the gates but have a validation RMSE no better "
+            "than the champion's (including its own re-logs and the current `@staging`), so none of them "
+            "could take `@champion`.",
             "",
             "| Version | Model | Gate | Val RMSE | Test RMSE | Aliases | Note |",
             "|---|---|---|---|---|---|---|",
